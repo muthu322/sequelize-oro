@@ -48,7 +48,6 @@ export class AutoBuilder {
         return this.executeQuery<string>(showViewsSql).then(tr2 => tr.concat(tr2));
       });
     }
-
     return prom.then(tr => this.processTables(tr))
       .catch(err => { console.error(err); return this.tableData; });
   }
@@ -78,44 +77,16 @@ export class AutoBuilder {
     }
 
     const promises = tables.map(t => {
-      return this.mapForeignKeys(t).then( 
+      return this.mapForeignKeys(t).then(
           () => {
-              console.log("MAP FORKEY JUNC WORKING")
-              return this.mapForeignKeysJunction(t).then( 
-                  () => {
-                      console.log("MAP TABLE WORKING")
+              
+                      console.log("MAP TABLE WORKING");
                       return this.mapTable(t)
-                  }
-              );
           });
   });
 
     return Promise.all(promises).then(() => this.tableData);
   }
-
-  private mapForeignKeysJunction(table: Table) {
-    const tableQname = makeTableQName(table);
-
-    
-      const sql = this.dialect.getForeignKeysJunction(table.table_name, table.table_schema || this.sequelize.getDatabaseName());
-    
-    const dialect = this.dialect;
-    const junction = this.tableData.junction;
-    // this.tableData.test = 'Muthukumar '+tableQname;
-    // this.tableData.junction[tableQname] = {};
-    this.tableData.junction = this.tableData.junction || {};
-    return this.executeQuery(sql).then(res => {
-        // res.forEach(assignColumnDetails);
-        console.log("MYJUNCTION");
-        console.log(res);
-        this.tableData.junction[tableQname] = res;
-    }).catch(err => console.error(err));
-    // function assignColumnDetails(row, ix, rows) {
-    //     let ref = row;
-    //     junction[tableQname] = junction[tableQname] || {};
-    //     junction[tableQname] = lodash_1.default.assign({}, junction[tableQname], ref);
-    // }
-}
 
   private mapForeignKeys(table: Table) {
 
@@ -138,7 +109,17 @@ export class AutoBuilder {
 
       if (!_.isEmpty(_.trim(ref.source_column)) && !_.isEmpty(_.trim(ref.target_column))) {
         ref.isForeignKey = true;
-        ref.foreignSources = _.pick(ref, ['source_table', 'source_schema', 'target_schema', 'target_table', 'source_column', 'target_column']);
+        ref.foreignSources = _.pick(ref, [
+          'source_table',
+          'source_schema',
+          'target_schema',
+          'target_table',
+          'source_column',
+          'target_column',
+          'on_update',
+          'on_delete',
+          'constraint_name'
+        ]);
       }
       if (dialect.isUnique && dialect.isUnique(ref as any as FKRow, rows)) {
         ref.isUnique = ref.constraint_name || true;

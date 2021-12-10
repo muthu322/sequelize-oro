@@ -162,8 +162,6 @@ export interface AutoOptions {
   noAlias?: boolean;
   /** Whether to skip writing index information */
   noIndexes?: boolean;
-  /** Whether to skip writing the init-models file */
-  noInitModels?: boolean;
   /** Whether to skip writing the files */
   noWrite?: boolean;
   /** Database password */
@@ -192,6 +190,8 @@ export interface AutoOptions {
   pkSuffixes?: string[];
   /** Use `sequelize.define` instead of `init` for model initialization.  See issues #527, #559, #573 */
   useDefine: boolean;
+  /** Migration TimeStamp */
+  migrationTimestamp?: number;
 }
 
 export type TSField = { special: string[]; elementType: string; } & ColumnDescription;
@@ -264,3 +264,13 @@ export function makeIndent(spaces: boolean | undefined, indent: number | undefin
   }
   return space;
 }
+
+export const getYYYYMMDDHHMMSS = (date = new Date()) =>
+  Number([
+    date.getUTCFullYear(),
+    (date.getUTCMonth() + 1).toString().padStart(2, '0'),
+    date.getUTCDate().toString().padStart(2, '0'),
+    date.getUTCHours().toString().padStart(2, '0'),
+    date.getUTCMinutes().toString().padStart(2, '0'),
+    date.getUTCSeconds().toString().padStart(2, '0'),
+  ].join(''));

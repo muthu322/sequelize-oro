@@ -3,7 +3,7 @@ import _ from "lodash";
 import path from "path";
 import util from "util";
 import { FKSpec, TableData } from ".";
-import { AutoOptions, CaseFileOption, CaseOption, LangOption, makeIndent, makeTableName, pluralize, qNameSplit, recase, Relation } from "./types";
+import { AutoOptions, CaseFileOption, CaseOption, LangOption, makeIndent, makeTableName, pluralize, qNameSplit, recase, Relation, getYYYYMMDDHHMMSS } from "./types";
 const mkdirp = require('mkdirp');
 
 /** Writes text into files from TableData.text, and writes init-models */
@@ -12,6 +12,7 @@ export class AutoWriter {
   foreignKeys: { [tableName: string]: { [fieldName: string]: FKSpec } };
   relations: Relation[];
   space: string[];
+  type: any;
   options: {
     caseFile?: CaseFileOption;
     caseModel?: CaseOption;
@@ -19,18 +20,19 @@ export class AutoWriter {
     directory: string;
     lang?: LangOption;
     noAlias?: boolean;
-    noInitModels?: boolean;
     noWrite?: boolean;
     singularize?: boolean;
     useDefine?: boolean;
     spaces?: boolean;
     indentation?: number;
+    migrationTimestamp?: number;
   };
-  constructor(tableData: TableData, options: AutoOptions) {
+  constructor(tableData: TableData, options: AutoOptions, type:any) {
     this.tableText = tableData.text as { [name: string]: string };
     this.foreignKeys = tableData.foreignKeys;
     this.relations = tableData.relations;
     this.options = options;
+    this.type = type;
     this.space = makeIndent(this.options.spaces, this.options.indentation);
   }
 
@@ -45,8 +47,14 @@ export class AutoWriter {
     const tables = _.keys(this.tableText);
 
     // write the individual model files
+    let timestamp = getYYYYMMDDHHMMSS();
+    if(this.options.migrationTimestamp) {
+      timestamp = this.options.migrationTimestamp;
+    }
     const promises = tables.map(t => {
-      return this.createFile(t);
+      ++timestamp;
+      console.log(t, timestamp);
+      return this.createFile(t, timestamp);
     });
 
     const isTypeScript = this.options.lang === 'ts';
@@ -58,15 +66,6 @@ export class AutoWriter {
       const [schemaName, tableName] = qNameSplit(t);
       return tableName as string;
     }).sort();
-
-    // write the init-models file
-    if (!this.options.noInitModels) {
-      const initString = this.createInitString(tableNames, assoc, this.options.lang);
-      const initFilePath = path.join(this.options.directory, "init-models" + (isTypeScript ? '.ts' : '.js'));
-      const writeFile = util.promisify(fs.writeFile);
-      const initPromise = writeFile(path.resolve(initFilePath), initString);
-      promises.push(initPromise);
-    }
 
     return Promise.all(promises);
   }
@@ -82,12 +81,17 @@ export class AutoWriter {
         return this.createES5InitString(tableNames, assoc, "var");
     }
   }
-  private createFile(table: string) {
+  private createFile(table: string, timestamp:any) {
     // FIXME: schema is not used to write the file name and there could be collisions. For now it
     // is up to the developer to pick the right schema, and potentially chose different output
     // folders for each different schema.
     const [schemaName, tableName] = qNameSplit(table);
-    const fileName = recase(this.options.caseFile, tableName, this.options.singularize);
+    let fileName = recase(this.options.caseFile, tableName, this.options.singularize);
+    if(this.type.forignKeys) {
+      fileName = timestamp +'-'+ fileName+'-forignKeys';
+    } else {
+      fileName = timestamp +'-'+ fileName;
+    }
     const filePath = path.join(this.options.directory, fileName + (this.options.lang === 'ts' ? '.ts' : '.js'));
 
     const writeFile = util.promisify(fs.writeFile);

@@ -17,7 +17,11 @@ export const postgresOptions: DialectOptions = {
     tc.constraint_type as constraint_type,
     tc.constraint_schema as source_schema,
     tc.table_name as source_table,
-    kcu.column_name as source_column,
+    kcu.column_name as source_column,	
+    CASE ct.confupdtype WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' WHEN 'a' THEN 'NO ACTION' ELSE NULL END AS on_update,
+    CASE ct.confdeltype WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' WHEN 'a' THEN 'NO ACTION' ELSE NULL END AS on_delete,
+    ct.condeferred,
+    ct.condeferrable,
     CASE WHEN tc.constraint_type = 'FOREIGN KEY' THEN ccu.constraint_schema ELSE null END AS target_schema,
     CASE WHEN tc.constraint_type = 'FOREIGN KEY' THEN ccu.table_name ELSE null END AS target_table,
     CASE WHEN tc.constraint_type = 'FOREIGN KEY' THEN ccu.column_name ELSE null END AS target_column,
@@ -30,45 +34,21 @@ export const postgresOptions: DialectOptions = {
       ON ccu.constraint_schema = tc.constraint_schema AND ccu.constraint_name = tc.constraint_name
     JOIN information_schema.columns AS co
       ON co.table_schema = kcu.table_schema AND co.table_name = kcu.table_name AND co.column_name = kcu.column_name
+	JOIN pg_catalog.pg_constraint as ct
+      ON ct.conname = tc.constraint_name
     WHERE tc.table_name = ${addTicks(tableName)}
       ${makeCondition('tc.constraint_schema', schemaName)}`;
   },
 
-      /**
-     * Generates an SQL query that returns Junction Table for BelongstoMany Relation
-     *
-     * @param  {String} tableName  The name of the table.
-     * @param  {String} schemaName The name of the schema.
-     * @return {String}            The generated sql query.
-     */
-       getForeignKeysJunction: (tableName:string, schemaName: string) => {
-        return `SELECT DISTINCT
-        tc.constraint_name as constraint_name,
-        tc.constraint_type as constraint_type,
-        tc.constraint_schema as source_schema,
-        tc.table_name as through,
-        kcu.column_name as foreignKey,
-        CASE WHEN tc.constraint_type = 'FOREIGN KEY' THEN ccu.constraint_schema ELSE null END AS target_schema,
-        CASE WHEN tc.constraint_type = 'FOREIGN KEY' THEN ccu.table_name ELSE null END AS target_table,
-        CASE WHEN tc.constraint_type = 'FOREIGN KEY' THEN ccu.column_name ELSE null END AS target_column,
-        jtc.constraint_name, jkc.column_name as targetColumn, jcu.table_name as source_model
-      
-        FROM information_schema.table_constraints AS tc
-        JOIN information_schema.key_column_usage AS kcu
-          ON tc.table_schema = kcu.table_schema AND tc.table_name = kcu.table_name AND tc.constraint_name = kcu.constraint_name AND kcu.column_name NOT IN ('created_by','deleted_by','updated_by','primary_customer','secondary_customer','tertiary_customer')
-        JOIN information_schema.constraint_column_usage AS ccu
-          ON ccu.constraint_schema = tc.constraint_schema AND ccu.constraint_name = tc.constraint_name
-        
-      JOIN information_schema.table_constraints AS jtc
-          ON tc.table_name = jtc.table_name AND jtc.constraint_type = 'FOREIGN KEY'
-      JOIN information_schema.key_column_usage AS jkc
-          ON tc.table_name = jkc.table_name AND jtc.constraint_name = jkc.constraint_name AND kcu.column_name != jkc.column_name AND jkc.column_name NOT IN ('created_by','deleted_by','updated_by','primary_customer','secondary_customer','tertiary_customer')
-      JOIN information_schema.constraint_column_usage AS jcu
-          ON jcu.constraint_schema = jtc.constraint_schema AND jcu.constraint_name = jtc.constraint_name
-        WHERE ccu.table_name = ${addTicks(tableName)} AND tc.table_name iLIKE '%_x_%'
-           AND tc.constraint_schema = 'public'
-      ${makeCondition('tc.constraint_schema', schemaName)}`;
-    },
+  getTriggers: (tableName: string, schemaName: string) => {
+    return `SELECT  g.*,p.*
+    FROM    pg_catalog.pg_namespace n
+    JOIN    pg_catalog.pg_proc p
+    JOIN    information_schema.triggers g ON g.action_statement LIKE concat('EXECUTE FUNCTION ',p.proname,'%')
+    ON      pronamespace = n.oid
+    WHERE   p.event_object_table = ${addTicks(tableName)}
+      ${makeCondition('p.trigger_schema', schemaName)}`;
+  },
 
   /**
    * Generates an SQL query that tells if this table has triggers or not. The

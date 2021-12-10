@@ -6,29 +6,25 @@ import { AutoGenerator } from "./auto-generator";
 import { AutoRelater } from "./auto-relater";
 import { AutoWriter } from "./auto-writer";
 import { dialects } from "./dialects/dialects";
-import { AutoOptions, TableData } from "./types";
-
+import { AutoOptions, TableData, getYYYYMMDDHHMMSS } from "./types";
 export class SequelizeAbsMigrate {
   sequelize: Sequelize;
   options: AutoOptions;
 
   constructor(database: string | Sequelize, username: string, password: string, options: AutoOptions) {
-    if (options && options.dialect === 'sqlite' && !options.storage && database) {
-      options.storage = database as string;
-    }
-    if (options && options.dialect === 'mssql') {
-      // set defaults for tedious, to silence the warnings
-      options.dialectOptions = options.dialectOptions || {};
-      options.dialectOptions.options = options.dialectOptions.options || {};
-      options.dialectOptions.options.trustServerCertificate = true;
-      options.dialectOptions.options.enableArithAbort = true;
-      options.dialectOptions.options.validateBulkLoadParameters = true;
-    }
 
     if (database instanceof Sequelize) {
       this.sequelize = database;
     } else {
       this.sequelize = new Sequelize(database, username, password, options || {});
+    }
+    if(options.migrationTimestamp) {
+      if(options.migrationTimestamp.toString().length!==14) 
+      {
+        options.migrationTimestamp = getYYYYMMDDHHMMSS();  
+      }
+    } else {
+      options.migrationTimestamp = getYYYYMMDDHHMMSS();
     }
 
     this.options = _.extend({
@@ -49,10 +45,20 @@ export class SequelizeAbsMigrate {
 
   async run(): Promise<TableData> {
     let td = await this.build();
+    let type = {};
     td = this.relate(td);
-    const tt = this.generate(td);
+    const tt = this.generateMigration(td, type);
     td.text = tt;
-    await this.write(td);
+    await this.write(td, type);
+    
+    // generate forignkey migrations
+    type = {
+      forignKeys: true,
+    }
+    const tg = this.generateConstraint(td, type);
+    td.text = tg;
+    await this.write(td, type);
+    
     return td;
   }
 
@@ -71,21 +77,25 @@ export class SequelizeAbsMigrate {
     return relater.buildRelations(td);
   }
 
-  generate(tableData: TableData) {
+  generateMigration(tableData: TableData, type: any) {
     const dialect = dialects[this.sequelize.getDialect() as Dialect];
-    const generator = new AutoGenerator(tableData, dialect, this.options);
-    return generator.generateText();
+    const generator = new AutoGenerator(tableData, dialect, this.options, type);
+    return generator.generateMigration();
   }
 
-  write(tableData: TableData) {
-    const writer = new AutoWriter(tableData, this.options);
+  generateConstraint(tableData: TableData, type: any) {
+    const dialect = dialects[this.sequelize.getDialect() as Dialect];
+    const generator = new AutoGenerator(tableData, dialect, this.options, type);
+    return generator.generateConstraint();
+  }
+
+  write(tableData: TableData, type: any) {
+    const writer = new AutoWriter(tableData, this.options, type);
     return writer.write();
   }
 
   getDefaultPort(dialect?: Dialect) {
     switch (dialect) {
-      case 'mssql':
-        return 1433;
       case 'postgres':
         return 5432;
       default:

@@ -13,6 +13,7 @@ export class AutoGenerator {
   indexes: { [tableName: string]: IndexSpec[]; };
   relations: Relation[];
   space: string[];
+  type: any;
   options: {
     indentation?: number;
     spaces?: boolean;
@@ -28,7 +29,7 @@ export class AutoGenerator {
     noIndexes?: boolean;
   };
 
-  constructor(tableData: TableData, dialect: DialectOptions, options: AutoOptions) {
+  constructor(tableData: TableData, dialect: DialectOptions, options: AutoOptions, type: any) {
     this.tables = tableData.tables;
     this.foreignKeys = tableData.foreignKeys;
     this.junction = tableData.junction;
@@ -39,152 +40,75 @@ export class AutoGenerator {
     this.options = options;
     this.options.lang = this.options.lang || 'es5';
     this.space = makeIndent(this.options.spaces, this.options.indentation);
+    this.type = type;
   }
 
   makeHeaderTemplate() {
     let header = "";
     const sp = this.space[1];
-
-    if (this.options.lang === 'ts') {
-      header += "import * as Sequelize from 'sequelize';\n";
-      header += "import { DataTypes, Model, Optional } from 'sequelize';\n";
-    } else if (this.options.lang === 'es6') {
-      header += "const Sequelize = require('sequelize');\n";
-      header += "module.exports = (sequelize, DataTypes) => {\n";
-      header += sp + "return #TABLE#.init(sequelize, DataTypes);\n";
-      header += "}\n\n";
-      header += "class #TABLE# extends Sequelize.Model {\n";
-      header += sp + "static init(sequelize, DataTypes) {\n";
-      if (this.options.useDefine) {
-        header += sp + "return sequelize.define('#TABLE#', {\n";
-      } else {
-        header += sp + "return super.init({\n";
-      }
-    } else if (this.options.lang === 'esm') {
-      header += "import _sequelize from 'sequelize';\n";
-      header += "const { Model, Sequelize } = _sequelize;\n\n";
-      header += "export default class #TABLE# extends Model {\n";
-      header += sp + "static init(sequelize, DataTypes) {\n";
-      if (this.options.useDefine) {
-        header += sp + "return sequelize.define('#TABLE#', {\n";
-      } else {
-        header += sp + "return super.init({\n";
-      }
-    } else {
-      // header += "const Sequelize = require('sequelize');\n";
-      header += 'module.exports = (sequelize, DataTypes) => {\n';
-      header += `${sp}const #TABLE# = sequelize.define('#TABLE#', {\n`;
-    }
+      header += 'module.exports = {\n';
     return header;
   }
 
-  generateText() {
+  generateMigration() {
     const tableNames = _.keys(this.tables);
-
-    const header = this.makeHeaderTemplate();
-
+    const header = `module.exports = {\n`;
     const text: { [name: string]: string; } = {};
     tableNames.forEach(table => {
       let str = header;
       const [schemaName, tableNameOrig] = qNameSplit(table);
-      const tableName = makeTableName(this.options.caseModel, tableNameOrig, this.options.singularize, this.options.lang);
-
-      if (this.options.lang === 'ts') {
-        const associations = this.addTypeScriptAssociationMixins(table);
-        const needed = _.keys(associations.needed).sort();
-        needed.forEach(fkTable => {
-          const set = associations.needed[fkTable];
-          const [fkSchema, fkTableName] = qNameSplit(fkTable);
-          const filename = recase(this.options.caseFile, fkTableName, this.options.singularize);
-          str += 'import type { ';
-          str += Array.from(set.values()).sort().join(', ');
-          str += ` } from './${filename}';\n`;
-        });
-
-        str += "\nexport interface #TABLE#Attributes {\n";
-        str += this.addTypeScriptFields(table, true) + "}\n\n";
-
-        const primaryKeys = this.getTypeScriptPrimaryKeys(table);
-
-        if (primaryKeys.length) {
-          str += `export type #TABLE#Pk = ${primaryKeys.map((k) => `"${recase(this.options.caseProp, k)}"`).join(' | ')};\n`;
-          str += `export type #TABLE#Id = #TABLE#[#TABLE#Pk];\n`;
-        }
-
-        const creationOptionalFields = this.getTypeScriptCreationOptionalFields(table);
-
-        if (creationOptionalFields.length) {
-          str += `export type #TABLE#OptionalAttributes = ${creationOptionalFields.map((k) => `"${recase(this.options.caseProp, k)}"`).join(' | ')};\n`;
-          str += "export type #TABLE#CreationAttributes = Optional<#TABLE#Attributes, #TABLE#OptionalAttributes>;\n\n";
-        } else {
-          str += "export type #TABLE#CreationAttributes = #TABLE#Attributes;\n\n";
-        }
-
-        str += "export class #TABLE# extends Model<#TABLE#Attributes, #TABLE#CreationAttributes> implements #TABLE#Attributes {\n";
-        str += this.addTypeScriptFields(table, false);
-        str += "\n" + associations.str;
-        str += "\n" + this.space[1] + "static initModel(sequelize: Sequelize.Sequelize): typeof #TABLE# {\n";
-
-        if (this.options.useDefine) {
-          str += this.space[2] + "return sequelize.define('#TABLE#', {\n";
-
-        } else {
-          str += this.space[2] + "return #TABLE#.init({\n";
-        }
+      if(tableNameOrig) {
+        str += this.addMigration(table);  
+        const re = new RegExp('#TABLE#', 'g');
+        str = str.replace(re, tableNameOrig);
+  
+        text[table] = str;
       }
-
-      str += this.addTable(table);
-      
-
-      const re = new RegExp('#TABLE#', 'g');
-      str = str.replace(re, tableName);
-
-      text[table] = str;
     });
 
     return text;
   }
-
   // Create a string for the model of the table
-  private addTable(table: string) {
+  private addMigration(table: string) {
 
     const [schemaName, tableNameOrig] = qNameSplit(table);
     const space = this.space;
     let timestamps = (this.options.additional && this.options.additional.timestamps === true) || false;
     let paranoid = (this.options.additional && this.options.additional.paranoid === true) || false;
 
-    // add all the fields
-    let str = '';
+    // add all Up fields
+    let str = `${space[1]}up: async (queryInterface, Sequelize) => {\n`;
+
+    str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`
+    str += `${space[2]}try {\n`
+
+
+    str += `${space[3]}await queryInterface.createTable(\n`;
+    str += `${space[4]}'${tableNameOrig}',\n`;
+    str += `${space[4]}{\n`;
     const fields = _.keys(this.tables[table]);
     fields.forEach((field, index) => {
       timestamps ||= this.isTimestampField(field);
       paranoid ||= this.isParanoidField(field);
 
-      str += this.addField(table, field);
+      str += this.addMigrationField(table, field);
     });
-
-    // trim off last ",\n"
-    // str = str.substring(0, str.length - 2) + "\n";
-
     // add the table options
-    str += space[1] + "}, {\n";
-    if (!this.options.useDefine) {
-      str += space[2] + "sequelize,\n";
-    }
-    str += space[2] + "tableName: '" + tableNameOrig + "',\n";
+    str += space[4] + "}, {\n";
 
     if (schemaName && this.dialect.hasSchema) {
-      str += space[2] + "schema: '" + schemaName + "',\n";
+      str += space[5] + "schema: '" + schemaName + "',\n";
     }
 
     if (this.hasTriggerTables[table]) {
-      str += space[2] + "hasTrigger: true,\n";
+      str += space[5] + "hasTrigger: true,\n";
     }
 
-    str += space[2] + "timestamps: " + timestamps + ",\n";
+    str += space[5] + "timestamps: " + timestamps + ",\n";
     if (paranoid) {
-      str += space[2] + "paranoid: true,\n";
+      str += space[5] + "paranoid: true,\n";
     }
+
 
     // conditionally add additional options
     const hasadditional = _.isObject(this.options.additional) && _.keys(this.options.additional).length > 0;
@@ -192,63 +116,54 @@ export class AutoGenerator {
       _.each(this.options.additional, (value, key) => {
         if (key === 'name') {
           // name: true - preserve table name always
-          str += space[2] + "name: {\n";
-          str += space[3] + "singular: '" + table + "',\n";
-          str += space[3] + "plural: '" + table + "'\n";
-          str += space[2] + "},\n";
+          str += space[5] + "name: {\n";
+          str += space[6] + "singular: '" + table + "',\n";
+          str += space[6] + "plural: '" + table + "'\n";
+          str += space[5] + "},\n";
         } else if (key === "timestamps" || key === "paranoid") {
           // handled above
         } else {
           value = _.isBoolean(value) ? value : ("'" + value + "'");
-          str += space[2] + key + ": " + value + ",\n";
+          str += space[5] + key + ": " + value + ",\n";
         }
       });
     }
 
     // add indexes
-    if (!this.options.noIndexes) {
-      str += this.addIndexes(table);
-    }
+    
 
-    str = space[2] + str.trim();
-    // str = str.substring(0, str.length - 1);
-    str += "\n" + space[1] + "}";
-
-    const lang = this.options.lang;
-      if (lang === 'ts' && this.options.useDefine) {
-        str += ") as typeof #TABLE#;\n";
-      } else {
-        str += ");\n";
-      }
-
-      if (lang === 'es6' || lang === 'esm' || lang === 'ts') {
-        if (this.options.useDefine) {
-          str += this.space[1] + "}\n}\n";
-        } else {
-          // str += this.space[1] + "return #TABLE#;\n";
-          str += this.space[1] + "}\n}\n";
-        }
-      } else {
-
-        str += `\n${space[1]}// const allAttributes = [`;
-      fields.forEach((field, index) => {
-        str += `\n${space[1]}// ${space[1]}'${field}',`;
-      });
-      str += `\n${space[1]}// ];\n`;
-
-      const associations = this.addAssociationRelations(table);
-
-      str += associations.str;
-
-      str += `\n${space[1]}return #TABLE#;`;
-      str += "\n};\n";
-      }
+    str += `${space[4]}}, { transaction },\n`;
+    str += `${space[3]});\n`;
+    str += this.addMigrationIndex(table, tableNameOrig || 'table');
+    str += `${space[3]}await transaction.commit();\n`;
+    str += `${space[2]}} catch (err) {\n`;
+    str += `${space[3]}await transaction.rollback();\n`;
+    str += `${space[3]}throw err;\n`;
+    str += `${space[2]}}\n`;
+    str += `${space[1]}},\n`;
+    str += `${space[1]}down: async (queryInterface) => {\n`;
+    str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`;
+    str += `${space[2]}try {\n`
+    
+    str += `${space[3]}console.log('Dropping Table ${tableNameOrig}...');\n`;
+    // str += this.removeMigrationIndex(table, tableNameOrig || 'table');
+    // fields.forEach((field, index) => {
+    //   str += this.removeForignKeyRelations(table, field, tableNameOrig||'table');
+    // });
+    str += `${space[3]}await queryInterface.dropTable('${tableNameOrig}', { transaction });\n`;
+    str += `${space[3]}await transaction.commit();\n`;
+    str += `${space[2]}} catch (err) {\n`;
+    str += `${space[3]}await transaction.rollback();\n`;
+    str += `${space[3]}throw err;\n`;
+    str += `${space[2]}}\n`;
+    str += `${space[1]}},\n`;
+    str +=`};\n`;
 
     return str;
   }
 
   // Create a string containing field attributes (type, defaultValue, etc.)
-  private addField(table: string, field: string): string {
+  private addMigrationField(table: string, field: string): string {
 
     // ignore Sequelize standard fields
     const additional = this.options.additional;
@@ -291,45 +206,38 @@ export class AutoGenerator {
       }
 
       if (isSerialKey && !wroteAutoIncrement) {
-        str += space[3] + "autoIncrement: true,\n";
+        str += space[6] + "autoIncrement: true,\n";
         // Resort to Postgres' GENERATED BY DEFAULT AS IDENTITY instead of SERIAL
         if (this.dialect.name === "postgres" && fieldObj.foreignKey && fieldObj.foreignKey.isPrimaryKey === true &&
           (fieldObj.foreignKey.generation === "ALWAYS" || fieldObj.foreignKey.generation === "BY DEFAULT")) {
-          str += space[3] + "autoIncrementIdentity: true,\n";
+          str += space[6] + "autoIncrementIdentity: true,\n";
         }
         wroteAutoIncrement = true;
       }
 
       if (attr === "foreignKey") {
-        if (foreignKey && foreignKey.isForeignKey) {
-          str += space[3] + "references: {\n";
-          str += space[4] + "model: \'" + fieldObj[attr].foreignSources.target_table + "\',\n";
-          str += space[4] + "key: \'" + fieldObj[attr].foreignSources.target_column + "\',\n";
-          str += space[3] + "}";
-        } else {
-          return true;
-        }
+        return true;
       } else if (attr === "references") {
         // covered by foreignKey
         return true;
       } else if (attr === "primaryKey") {
         if (fieldObj[attr] === true && (!_.has(fieldObj, 'foreignKey') || !!fieldObj.foreignKey.isPrimaryKey)) {
-          str += space[3] + "primaryKey: true";
+          str += space[6] + "primaryKey: true";
         } else {
           return true;
         }
       } else if (attr === "autoIncrement") {
         if (fieldObj[attr] === true && !wroteAutoIncrement) {
-          str += space[3] + "autoIncrement: true,\n";
+          str += space[6] + "autoIncrement: true,\n";
           // Resort to Postgres' GENERATED BY DEFAULT AS IDENTITY instead of SERIAL
           if (this.dialect.name === "postgres" && fieldObj.foreignKey && fieldObj.foreignKey.isPrimaryKey === true && (fieldObj.foreignKey.generation === "ALWAYS" || fieldObj.foreignKey.generation === "BY DEFAULT")) {
-            str += space[3] + "autoIncrementIdentity: true,\n";
+            str += space[6] + "autoIncrementIdentity: true,\n";
           }
           wroteAutoIncrement = true;
         }
         return true;
       } else if (attr === "allowNull") {
-        str += space[3] + attr + ": " + fieldObj[attr];
+        str += space[6] + attr + ": " + fieldObj[attr];
       } else if (attr === "defaultValue") {
         let defaultVal = fieldObj.defaultValue;
         if (this.dialect.name === "mssql" && defaultVal && defaultVal.toLowerCase() === '(newid())') {
@@ -374,7 +282,7 @@ export class AutoGenerator {
             val_text = defaultVal;
 
           } else if (field_type === 'uuid' && (defaultVal === 'gen_random_uuid()' || defaultVal === 'uuid_generate_v4()')) {
-            val_text = "DataTypes.UUIDV4";
+            val_text = "Sequelize.DataTypes.UUIDV4";
 
           } else if (defaultVal.match(/\w+\(\)$/)) {
             // replace db function with sequelize function
@@ -411,7 +319,7 @@ export class AutoGenerator {
         // don't prepend N for MSSQL when building models...
         // defaultVal = _.trimStart(defaultVal, 'N');
 
-        str += space[3] + attr + ": " + val_text;
+        str += space[6] + attr + ": " + val_text;
 
       } else if (attr === "comment" && !fieldObj[attr]) {
         return true;
@@ -421,7 +329,7 @@ export class AutoGenerator {
           val = (fieldObj as any)[attr];
           val = _.isString(val) ? quoteWrapper + this.escapeSpecial(val) + quoteWrapper : val;
         }
-        str += space[3] + attr + ": " + val;
+        str += space[6] + attr + ": " + val;
       }
 
       str += ",\n";
@@ -429,18 +337,216 @@ export class AutoGenerator {
 
     if (unique) {
       const uniq = _.isString(unique) ? quoteWrapper + unique.replace(/\"/g, '\\"') + quoteWrapper : unique;
-      str += space[3] + "unique: " + uniq + ",\n";
+      str += space[6] + "unique: " + uniq + ",\n";
     }
 
     if (field !== fieldName) {
-      str += space[3] + "field: '" + field + "',\n";
+      str += space[6] + "field: '" + field + "',\n";
     }
 
     // removes the last `,` within the attribute options
     //str = str.trim().replace(/,+$/, '') + "\n";
-    str = space[2] + str + space[2] + "},\n";
+    str = space[5] + str + space[5] + "},\n";
     return str;
   }
+  
+  private addMigrationIndex(table: string, tableNameOrig: string): string {
+
+    const indexes = this.indexes[table];
+    const space = this.space;
+    let str = "";
+    if (indexes && indexes.length) {
+      indexes.forEach(idx => {
+
+        str += `${space[3]}await queryInterface.addIndex('${tableNameOrig}', {\n`;
+        if (idx.name) {
+          str += space[4] + `name: '${idx.name}',\n`;
+        }
+
+        if (idx.unique) {
+          str += `${space[4]}unique: true,\n`;
+        }
+
+        if (idx.type) {
+          if (['UNIQUE', 'FULLTEXT', 'SPATIAL'].includes(idx.type)) {
+            str += `${space[4]}type: '${idx.type}',\n`;
+          } else {
+            str += space[4] + `using: "${idx.type}",\n`;
+          }
+        }
+
+        str += space[4] + `fields: [\n`;
+        idx.fields.forEach(ff => {
+          str += space[5]+ `{ name: '${ff.attribute}'`;
+          if (ff.collate) {
+            str += `, collate: '${ff.collate}'`;
+          }
+          if (ff.length) {
+            str += `, length: ${ff.length}`;
+          }
+          if (ff.order && ff.order !== "ASC") {
+            str += `, order: '${ff.order}'`;
+          }
+          str += " },\n";
+        });
+
+        str += space[4] + "],\n";
+        str += `${space[4]}transaction,\n`;
+        str += space[3] + "});\n";
+      });
+    }
+    return str;
+  }
+
+  private removeMigrationIndex(table: string, tableNameOrig: string): string {
+
+    const indexes = this.indexes[table];
+    const space = this.space;
+    let str = "";
+    if (indexes && indexes.length) {
+      indexes.forEach(idx => {
+        if (idx.name) {
+        str += `${space[3]}await queryInterface.removeIndex('${tableNameOrig}', '${idx.name}', { transaction });\n`;
+                }
+      });
+    }
+    return str;
+  }
+  
+  generateConstraint() {
+    const tableNames = _.keys(this.tables);
+    const header = `module.exports = {\n`;
+    const text: { [name: string]: string; } = {};
+    tableNames.forEach(table => {
+      let str = header;
+      const [schemaName, tableNameOrig] = qNameSplit(table);
+      if(tableNameOrig) {
+        str += this.addConstraint(table);  
+        const re = new RegExp('#TABLE#', 'g');
+        str = str.replace(re, tableNameOrig);
+  
+        text[table] = str;
+      }
+    });
+
+    return text;
+  }
+  private addConstraint(table: string) {
+    const [schemaName, tableNameOrig] = qNameSplit(table);
+    const space = this.space;
+
+    // add all Up fields
+    let str = `${space[1]}up: async (queryInterface) => {\n`;
+    str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`
+    str += `${space[2]}try {\n`
+    const fields = _.keys(this.tables[table]);
+    fields.forEach((field, index) => {
+      str += this.addForignKeyRelations(table, field, tableNameOrig||'table');
+    });
+    str += `${space[3]}await transaction.commit();\n`;
+    str += `${space[2]}} catch (err) {\n`;
+    str += `${space[3]}await transaction.rollback();\n`;
+    str += `${space[3]}throw err;\n`;
+    str += `${space[2]}}\n`;
+    str += `${space[1]}},\n`;
+    str += `${space[1]}down: async (queryInterface) => {\n`;
+    str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`;
+    str += `${space[2]}try {\n`
+    
+    str += `${space[3]}console.log('Dropping Constraints of Table ${tableNameOrig}...');\n`
+    fields.forEach((field, index) => {
+      str += this.removeForignKeyRelations(table, field, tableNameOrig||'table');
+    });
+    str += `${space[3]}await transaction.commit();\n`;
+    str += `${space[2]}} catch (err) {\n`;
+    str += `${space[3]}await transaction.rollback();\n`;
+    str += `${space[3]}throw err;\n`;
+    str += `${space[2]}}\n`;
+    str += `${space[1]}},\n`;
+    str +=`};\n`;
+
+    return str;
+  }
+  private removeForignKeyRelations(table: string, field: string, tableNameOrig: string): string {
+
+    // ignore Sequelize standard fields
+    const additional = this.options.additional;
+    if (additional && (additional.timestamps !== false) && (this.isTimestampField(field) || this.isParanoidField(field))) {
+      return '';
+    }
+
+    if (this.isIgnoredField(field)) {
+      return '';
+    }
+
+    // Find foreign key
+    const foreignKey = this.foreignKeys[table] && this.foreignKeys[table][field] ? this.foreignKeys[table][field] : null;
+    const fieldObj = this.tables[table][field] as Field;
+
+    if (_.isObject(foreignKey)) {
+      fieldObj.foreignKey = foreignKey;
+    }
+
+    let str = '';
+    const space = this.space;
+    const fieldAttrs = _.keys(fieldObj);
+    fieldAttrs.forEach(attr => {
+      if (attr === "foreignKey") {
+        if (foreignKey && foreignKey.isForeignKey) {
+          str += `${space[3]}await queryInterface.removeConstraint('${tableNameOrig}', '${fieldObj[attr].foreignSources.constraint_name}', { transaction });\n`
+        } else {
+          return true;
+        }
+      } 
+    });
+    return str; 
+}
+
+private addForignKeyRelations(table: string, field: string, tableNameOrig: string): string {
+
+  // ignore Sequelize standard fields
+  const additional = this.options.additional;
+  if (additional && (additional.timestamps !== false) && (this.isTimestampField(field) || this.isParanoidField(field))) {
+    return '';
+  }
+
+  if (this.isIgnoredField(field)) {
+    return '';
+  }
+
+  // Find foreign key
+  const foreignKey = this.foreignKeys[table] && this.foreignKeys[table][field] ? this.foreignKeys[table][field] : null;
+  const fieldObj = this.tables[table][field] as Field;
+
+  if (_.isObject(foreignKey)) {
+    fieldObj.foreignKey = foreignKey;
+  }
+  
+  let str = '';
+  const space = this.space;
+  const fieldAttrs = _.keys(fieldObj);
+  fieldAttrs.forEach(attr => {
+    if (attr === "foreignKey") {
+      if (foreignKey && foreignKey.isForeignKey) {
+        str += `${space[3]}await queryInterface.addConstraint('${tableNameOrig}', {\n`;
+        str += `${space[4]}type: 'foreign key',\n`;
+        str += `${space[4]}name: '${fieldObj[attr].foreignSources.constraint_name}',\n`;
+        str += `${space[4]}fields: ['${field}'],\n`;
+        str += `${space[4]}references: {\n`;
+        str += `${space[5]}table: '${fieldObj[attr].foreignSources.target_table}',\n`;
+        str += `${space[5]}field: '${fieldObj[attr].foreignSources.target_column}',\n`;
+        str += `${space[4]}},\n`;
+        str += `${space[4]}onDelete: '${fieldObj[attr].foreignSources.on_delete}',\n`;
+        str += `${space[4]}onUpdate: '${fieldObj[attr].foreignSources.on_update}',\n`;
+        str += `${space[4]}transaction,\n`;
+        str += `${space[3]}});\n`;
+      } else {
+        return true;
+      }
+    } 
+  });
+  return str; 
+}
 
   private addIndexes(table: string) {
     const indexes = this.indexes[table];
@@ -489,7 +595,7 @@ export class AutoGenerator {
   private getSqType(fieldObj: Field, attr: string): string {
     const attrValue = (fieldObj as any)[attr];
     if (!attrValue.toLowerCase) {
-      console.log("attrValue", attr, attrValue);
+      // console.log("attrValue", attr, attrValue);
       return attrValue;
     }
     const type: string = attrValue.toLowerCase();
@@ -499,23 +605,23 @@ export class AutoGenerator {
     let typematch = null;
 
     if (type === "boolean" || type === "bit(1)" || type === "bit" || type === "tinyint(1)") {
-      val = 'DataTypes.BOOLEAN';
+      val = 'Sequelize.DataTypes.BOOLEAN';
 
     // postgres range types
     } else if (type === "numrange") {
-      val = 'DataTypes.RANGE(DataTypes.DECIMAL)';
+      val = 'Sequelize.DataTypes.RANGE(DataTypes.DECIMAL)';
     } else if (type === "int4range") {
-      val = 'DataTypes.RANGE(DataTypes.INTEGER)';
+      val = 'Sequelize.DataTypes.RANGE(DataTypes.INTEGER)';
     } else if (type === "int8range") {
-      val = 'DataTypes.RANGE(DataTypes.BIGINT)';
+      val = 'Sequelize.DataTypes.RANGE(DataTypes.BIGINT)';
     } else if (type === "daterange") {
-      val = 'DataTypes.RANGE(DataTypes.DATEONLY)';
+      val = 'Sequelize.DataTypes.RANGE(DataTypes.DATEONLY)';
     } else if (type === "tsrange" || type === "tstzrange") {
-      val = 'DataTypes.RANGE(DataTypes.DATE)';
+      val = 'Sequelize.DataTypes.RANGE(DataTypes.DATE)';
 
     } else if (typematch = type.match(/^(bigint|smallint|mediumint|tinyint|int)/)) {
       // integer subtypes
-      val = 'DataTypes.' + (typematch[0] === 'int' ? 'INTEGER' : typematch[0].toUpperCase());
+      val = 'Sequelize.DataTypes.' + (typematch[0] === 'int' ? 'INTEGER' : typematch[0].toUpperCase());
       if (/unsigned/i.test(type)) {
         val += '.UNSIGNED';
       }
@@ -523,61 +629,61 @@ export class AutoGenerator {
         val += '.ZEROFILL';
       }
     } else if (type === 'nvarchar(max)' || type === 'varchar(max)') {
-        val = 'DataTypes.TEXT';
+        val = 'Sequelize.DataTypes.TEXT';
     } else if (type.match(/n?varchar|string|varying/)) {
-      val = 'DataTypes.STRING' + (!_.isNull(length) ? length : '');
+      val = 'Sequelize.DataTypes.STRING' + (!_.isNull(length) ? length : '');
     } else if (type.match(/^n?char/)) {
-      val = 'DataTypes.CHAR' + (!_.isNull(length) ? length : '');
+      val = 'Sequelize.DataTypes.CHAR' + (!_.isNull(length) ? length : '');
     } else if (type.match(/^real/)) {
-      val = 'DataTypes.REAL';
+      val = 'Sequelize.DataTypes.REAL';
     } else if (type.match(/text$/)) {
-      val = 'DataTypes.TEXT' + (!_.isNull(length) ? length : '');
+      val = 'Sequelize.DataTypes.TEXT' + (!_.isNull(length) ? length : '');
     } else if (type === "date") {
-      val = 'DataTypes.DATEONLY';
+      val = 'Sequelize.DataTypes.DATEONLY';
     } else if (type.match(/^(date|timestamp|year)/)) {
-      val = 'DataTypes.DATE' + (!_.isNull(length) ? length : '');
+      val = 'Sequelize.DataTypes.DATE' + (!_.isNull(length) ? length : '');
     } else if (type.match(/^(time)/)) {
-      val = 'DataTypes.TIME';
+      val = 'Sequelize.DataTypes.TIME';
     } else if (type.match(/^(float|float4)/)) {
-      val = 'DataTypes.FLOAT' + (!_.isNull(precision) ? precision : '');
+      val = 'Sequelize.DataTypes.FLOAT' + (!_.isNull(precision) ? precision : '');
     } else if (type.match(/^(decimal|numeric)/)) {
-      val = 'DataTypes.DECIMAL' + (!_.isNull(precision) ? precision : '');
+      val = 'Sequelize.DataTypes.DECIMAL' + (!_.isNull(precision) ? precision : '');
     } else if (type.match(/^money/)) {
-      val = 'DataTypes.DECIMAL(19,4)';
+      val = 'Sequelize.DataTypes.DECIMAL(19,4)';
     } else if (type.match(/^smallmoney/)) {
-      val = 'DataTypes.DECIMAL(10,4)';
+      val = 'Sequelize.DataTypes.DECIMAL(10,4)';
     } else if (type.match(/^(float8|double)/)) {
-      val = 'DataTypes.DOUBLE' + (!_.isNull(precision) ? precision : '');
+      val = 'Sequelize.DataTypes.DOUBLE' + (!_.isNull(precision) ? precision : '');
     } else if (type.match(/^uuid|uniqueidentifier/)) {
-      val = 'DataTypes.UUID';
+      val = 'Sequelize.DataTypes.UUID';
     } else if (type.match(/^jsonb/)) {
-      val = 'DataTypes.JSONB';
+      val = 'Sequelize.DataTypes.JSONB';
     } else if (type.match(/^json/)) {
-      val = 'DataTypes.JSON';
+      val = 'Sequelize.DataTypes.JSON';
     } else if (type.match(/^geometry/)) {
       const gtype = fieldObj.elementType ? `(${fieldObj.elementType})` : '';
-      val = `DataTypes.GEOMETRY${gtype}`;
+      val = `Sequelize.DataTypes.GEOMETRY${gtype}`;
     } else if (type.match(/^geography/)) {
       const gtype = fieldObj.elementType ? `(${fieldObj.elementType})` : '';
-      val = `DataTypes.GEOGRAPHY${gtype}`;
+      val = `Sequelize.DataTypes.GEOGRAPHY${gtype}`;
     } else if (type.match(/^array/)) {
       const eltype = this.getSqType(fieldObj, "elementType");
-      val = `DataTypes.ARRAY(${eltype})`;
+      val = `Sequelize.DataTypes.ARRAY(${eltype})`;
     } else if (type.match(/(binary|image|blob|bytea)/)) {
-      val = 'DataTypes.BLOB';
+      val = 'Sequelize.DataTypes.BLOB';
     } else if (type.match(/^hstore/)) {
-      val = 'DataTypes.HSTORE';
+      val = 'Sequelize.DataTypes.HSTORE';
     } else if (type.match(/^inet/)) {
-      val = 'DataTypes.INET';
+      val = 'Sequelize.DataTypes.INET';
     } else if (type.match(/^cidr/)) {
-      val = 'DataTypes.CIDR';
+      val = 'Sequelize.DataTypes.CIDR';
     } else if (type.match(/^oid/)) {
-      val = 'DataTypes.INTEGER';
+      val = 'Sequelize.DataTypes.INTEGER';
     } else if (type.match(/^macaddr/)) {
-      val = 'DataTypes.MACADDR';
+      val = 'Sequelize.DataTypes.MACADDR';
     } else if (type.match(/^enum(\(.*\))?$/)) {
       const enumValues = this.getEnumValues(fieldObj);
-      val = `DataTypes.ENUM(${enumValues})`;
+      val = `Sequelize.DataTypes.ENUM(${enumValues.join(', ')})`;
     }
 
     return val as string;
@@ -903,10 +1009,10 @@ export class AutoGenerator {
   private getEnumValues(fieldObj: TSField): string[] {
     if (fieldObj.special) {
       // postgres
-      return fieldObj.special.map((v) => `"${v}"`);
+      return fieldObj.special.map((v) => `'${v}'`);
     } else {
       // mysql
-      return fieldObj.type.substring(5, fieldObj.type.length - 1).split(',');
+      return fieldObj.type.substring(5, fieldObj.type.length - 1).split(', ');
     }
   }
 

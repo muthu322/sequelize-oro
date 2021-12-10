@@ -1,0 +1,413 @@
+
+SELECT
+    routine_definition 
+FROM
+    information_schema.routines 
+WHERE
+    specific_schema LIKE 'public'
+    
+
+SELECT event_object_table AS table_name ,trigger_name         
+FROM information_schema.triggers  
+GROUP BY table_name , trigger_name 
+ORDER BY table_name , trigger_name 
+
+select 
+    prosrc
+from pg_trigger, pg_proc
+where
+ pg_proc.oid=pg_trigger.tgfoid
+ and pg_trigger.tgname like '<name>'
+ 
+ 
+ select n.nspname as function_schema,
+       p.proname as function_name,
+       l.lanname as function_language,
+       case when l.lanname = 'internal' then p.prosrc
+            else pg_get_functiondef(p.oid)
+            end as definition,
+       pg_get_function_arguments(p.oid) as function_arguments,
+       t.typname as return_type
+from pg_proc p
+left join pg_namespace n on p.pronamespace = n.oid
+left join pg_language l on p.prolang = l.oid
+left join pg_type t on t.oid = p.prorettype 
+where n.nspname not in ('pg_catalog', 'information_schema')
+order by function_schema,
+             function_name;
+
+
+// sequelize add index refer loan_reciepts table for unique keys
+
+module.exports = {
+  async up(queryInterface, Sequelize) {
+    const transaction = await queryInterface.sequelize.transaction();
+    try {
+      await queryInterface.addColumn(
+        'Person',
+        'petName',
+        {
+          type: Sequelize.DataTypes.STRING,
+        },
+        { transaction }
+      );
+      await queryInterface.addIndex(
+        'Person',
+        'petName',
+        {
+          fields: 'petName',
+          unique: true,
+          transaction,
+        }
+      );
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  },
+  async down(queryInterface, Sequelize) {
+    const transaction = await queryInterface.sequelize.transaction();
+    try {
+      await queryInterface.removeColumn('Person', 'petName', { transaction });
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  }
+};
+
+             
+node_modules/.bin/sequelize db:migrate
+
+
+CREATE SEQUENCE "public".account_activity_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".address_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".bank_account_details_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".branch_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".branch_x_loan_type_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".city_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".city_x_branch_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".employment_info_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".gold_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".gold_ornament_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".kyc_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".lead_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".lead_source_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".lead_type_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".loan_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".loan_receipts_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".loan_status_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".loan_status_log_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".loan_type_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".nominee_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".oro_meta_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".otp_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".partner_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".partner_type_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".partner_x_loan_type_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".partner_x_partner_type_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".payment_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".pincode_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".plan_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".plan_x_branch_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".plan_x_loan_type_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".rate_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".receiver_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".refund_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".role_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".safe_payment_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".safe_subscription_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".safe_user_x_nominee_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".seal_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".secondary_contact_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".transaction_fee_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".user_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".van_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".visit_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".visit_status_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".visit_status_log_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".visit_x_agent_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE SEQUENCE "public".visit_x_gold_ornament_id_seq START WITH 1 INCREMENT BY 1;
+
+CREATE  TABLE "public".loan ( 
+	id                   integer DEFAULT nextval('loan_id_seq'::regclass) NOT NULL ,
+	loan_number          text   ,
+	gl_loan_id           integer   ,
+	is_active            boolean DEFAULT true NOT NULL ,
+	tenure               smallint   ,
+	user_id              integer  NOT NULL ,
+	plan_id              integer   ,
+	rate_id              integer   ,
+	branch_id            integer   ,
+	loan_account_number  text   ,
+	bank_customer_id     text   ,
+	eligible_amount      float8   ,
+	sanctioned_amount    float8   ,
+	orocorp_approved_at  timestamptz   ,
+	checker_confirmed_at timestamptz   ,
+	verifier_confirmed_at timestamptz   ,
+	closed_at            timestamptz   ,
+	released_at          timestamptz   ,
+	oro_interest_rate    float8  NOT NULL ,
+	lender_interest_rate float8  NOT NULL ,
+	oro_pending_principal integer  NOT NULL ,
+	lender_pending_principal integer  NOT NULL ,
+	lender_pending_interest integer  NOT NULL ,
+	next_compounding_at  text   ,
+	next_jumping_at      text   ,
+	lender_unsettled_interest integer   ,
+	loan_booking_date    text   ,
+	last_payment_at      text   ,
+	interest_updated_at  text   ,
+	created_at           timestamptz  NOT NULL ,
+	updated_at           timestamptz  NOT NULL ,
+	renewed_from_loan_id integer   ,
+	loan_type_id         integer  NOT NULL ,
+	orocorp_approved_by  integer   ,
+	is_deleted           boolean DEFAULT false NOT NULL ,
+	loan_status_id       integer   ,
+	city_id              integer   ,
+	CONSTRAINT pk_loan_id PRIMARY KEY ( id ),
+	CONSTRAINT fk_loan_gl FOREIGN KEY ( gl_loan_id ) REFERENCES "public".loan( id )   
+ );
+
+drop function if exists Foo;
+
+
+CREATE OR REPLACE FUNCTION public.branch_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+		NEW.branch_number := 'OMB' || 10000 + NEW.id || trunc(random() * 10);
+        RETURN NEW;
+    END;
+    $function$
+;
+
+CREATE OR REPLACE FUNCTION public.gold_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+		NEW.gold_number := 'OMG' || 10000 + NEW.id || trunc(random() * 10);
+        RETURN NEW;
+    END;
+    $function$
+;
+
+CREATE OR REPLACE FUNCTION public.loan_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+        IF NEW.loan_type_id = 1 THEN
+            NEW.loan_number := 'OMGL' ||  (10000 + NEW.id)  || trunc(random() * 10);
+        ELSEIF NEW.loan_type_id = 2 THEN
+			NEW.loan_number := 'OMSL' || (100000 + NEW.id)  || trunc(random() * 10);
+		ELSE
+            NEW.loan_number := 'OML' ||  (10000 + NEW.id)  || trunc(random() * 10);
+        END IF;
+        RETURN NEW;
+    END;
+    $function$
+;
+
+CREATE OR REPLACE FUNCTION public.partner_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+		NEW.partner_number := 'OMLP' || 10000 + NEW.id || trunc(random() * 10);
+        RETURN NEW;
+    END;
+    $function$
+;
+
+CREATE OR REPLACE FUNCTION public.plan_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+		NEW.plan_number := 'OMP' || 10000 + NEW.id || trunc(random() * 10);
+        RETURN NEW;
+    END;
+    $function$
+;
+
+CREATE OR REPLACE FUNCTION public.rate_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+		NEW.rate_number := 'OMR' || 10000 + NEW.id || trunc(random() * 10);
+        RETURN NEW;
+    END;
+    $function$
+;
+
+CREATE OR REPLACE FUNCTION public.user_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+        IF NEW.role_id = 6 THEN
+            NEW.user_number := 'OMFA' ||  (10000 + NEW.id)  || trunc(random() * 10);
+        ELSEIF NEW.role_id = 1 THEN
+			NEW.user_number := 'OMC' || (100000 + NEW.id)  || trunc(random() * 10);
+		ELSE
+            NEW.user_number := 'OMEMP' ||  (10000 + NEW.id)  || trunc(random() * 10);
+        END IF;
+        RETURN NEW;
+    END;
+    $function$
+;
+
+CREATE OR REPLACE FUNCTION public.visit_number_function()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+    BEGIN
+        IF NEW.visit_type = 'GOLD_PICKUP' THEN
+            NEW.visit_number := 'OMV' || (NEW.city_id * 10000) + NEW.id  || '-' || trunc(random() * 10);
+        ELSE 
+            NEW.visit_number := 'OMV' || (NEW.city_id * 10000) + NEW.id  || '-' || trunc(random() * 10);
+        END IF;
+        RETURN NEW;
+    END;
+    $function$
+;
+
+select event_object_schema as table_schema,
+       event_object_table as table_name,
+       trigger_schema,
+       trigger_name,
+       string_agg(event_manipulation, ',') as event,
+       action_timing as activation,
+       action_condition as condition,
+       action_statement as definition,
+	   action_orientation
+from information_schema.triggers
+group by 1,2,3,4,6,7,8,9
+
+
+SELECT  n.*,p.*
+FROM    pg_catalog.pg_namespace n
+JOIN    pg_catalog.pg_proc p
+ON      pronamespace = n.oid
+WHERE   nspname = 'public';
+
+
+
+CREATE TRIGGER branch_number_trigger BEFORE INSERT ON public.branch FOR EACH ROW EXECUTE FUNCTION branch_number_function();
+
+CREATE TRIGGER gold_number_trigger BEFORE INSERT ON public.gold FOR EACH ROW EXECUTE FUNCTION gold_number_function();
+
+CREATE TRIGGER loan_number_trigger BEFORE INSERT ON public.loan FOR EACH ROW EXECUTE FUNCTION loan_number_function();
+
+CREATE TRIGGER partner_number_trigger BEFORE INSERT ON public.partner FOR EACH ROW EXECUTE FUNCTION partner_number_function();
+
+CREATE TRIGGER plan_number_trigger BEFORE INSERT ON public.plan FOR EACH ROW EXECUTE FUNCTION plan_number_function();
+
+CREATE TRIGGER rate_number_trigger BEFORE INSERT ON public.rate FOR EACH ROW EXECUTE FUNCTION rate_number_function();
+
+CREATE TRIGGER user_number_trigger BEFORE INSERT ON public."user" FOR EACH ROW EXECUTE FUNCTION user_number_function();
+
+CREATE TRIGGER visit_number_trigger BEFORE INSERT ON public.visit FOR EACH ROW EXECUTE FUNCTION visit_number_function();
+
+
+module.exports = {
+  up: (queryInterface, Sequelize) => queryInterface
+    .addConstraint('app_users', {
+      type: 'UNIQUE',
+      fields: ['email', 'column2', 'column3'],
+      name: 'unique_user_email',
+    }),
+  down: (queryInterface, Sequelize) => queryInterface
+    .removeConstraint('app_users', 'unique_user_email'),
+};
+
+
+module.exports = {
+  up: function(queryInterface, Sequelize) {
+    return queryInterface.sequelize.query("ALTER TABLE app_users ADD CONSTRAINT unique_user_email UNIQUE (email,column2,column3);")
+  },
+  down: function(queryInterface, Sequelize) {
+    return queryInterface.sequelize.query("ALTER TABLE app_users DROP INDEX unique_user_email;")
+  }
+};
+
+CREATE TRIGGER mytrigger
+    BEFORE INSERT OR UPDATE ON "mytable"
+    FOR EACH ROW 
+    WHEN (NEW.score > 0 AND OLD.score <> NEW.score)
+    EXECUTE PROCEDURE mytrigger();
+    
+    
+    queryInterface.bulkInsert('roles', [{
+   label: 'user',
+   createdAt: new Date(),
+   updatedAt: new Date()
+ }, {
+   label: 'admin',
+   createdAt: new Date(),
+   updatedAt: new Date()
+ }]);
+ 
+ ALTER TABLE "public".city DROP CONSTRAINT fk_city_created_user;
+ALTER TABLE "public".city ADD CONSTRAINT fk_city_created_user FOREIGN KEY ( created_by ) REFERENCES "public"."user"( id ) DEFERRABLE INITIALLY DEFERRED
+
+ALTER TABLE "public".city ADD CONSTRAINT fk_city_created_user FOREIGN KEY ( created_by ) REFERENCES "public"."user"( id ) ON UPDATE CASCADE DEFERRABLE INITIALLY IMMEDIATE
+
+ALTER TABLE "public".city ADD CONSTRAINT fk_city_created_user FOREIGN KEY ( created_by ) REFERENCES "public"."user"( id ) INITIALLY IMMEDIATE
+
+

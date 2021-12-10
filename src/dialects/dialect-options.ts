@@ -6,7 +6,7 @@ export interface DialectOptions {
   hasSchema: boolean;
   
   getForeignKeysQuery: (tableName: string, schemaName: string) => string;
-  getForeignKeysJunction: (tableName: string, schemaName: string) => string;
+  getTriggers: (tableName: string, schemaName: string) => string;
   remapForeignKeysRow?: (tableName: string, row: FKRow) => FKRelation;
   countTriggerQuery: (tableName: string, schemaName: string) => string;
   isForeignKey?: (record: any) => boolean;
