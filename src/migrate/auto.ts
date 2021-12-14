@@ -7,7 +7,7 @@ import { AutoGenerator } from './auto-generator';
 import { AutoRelater } from './auto-relater';
 import { AutoWriter } from './auto-writer';
 import { AutoOptions, getYYYYMMDDHHMMSS, TableData } from './types';
-export class SequelizeAbsMigrate {
+export class SequelizeMigrate {
   sequelize: Sequelize;
   options: AutoOptions;
 
@@ -115,6 +115,6 @@ export class SequelizeAbsMigrate {
     }
   }
 }
-module.exports = SequelizeAbsMigrate;
-module.exports.SequelizeAbsMigrate = SequelizeAbsMigrate;
-module.exports.default = SequelizeAbsMigrate;
+module.exports = SequelizeMigrate;
+module.exports.SequelizeMigrate = SequelizeMigrate;
+module.exports.default = SequelizeMigrate;

@@ -24,9 +24,6 @@
     "types/**/*.ts",
     "*.md"
   ],
-  "bin": {
-    "sequelize-oro": "bin/sequelize-oro"
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/muthu322/sequelize-oro.git"
@@ -43,7 +40,6 @@
     "tsc": "tsc",
     "clean": "rimraf lib && rimraf types && rimraf **/models && rimraf *.tgz",
     "build": "npm run clean && tsc",
-    "prepack": "crlf --set=LF bin/sequelize-oro",
     "test": "npm run test-mssql && npm run test-mysql && npm run test-postgres && npm run test-sqlite",
     "test-postgres": "cross-env DEBUG='sequelize-oro:*' DIALECT=postgres nyc mocha",
     "test-postgres-native": "cross-env DEBUG='sequelize-oro:*' DIALECT=postgres-native nyc mocha",

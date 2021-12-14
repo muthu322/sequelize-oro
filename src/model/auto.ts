@@ -8,7 +8,7 @@ import { AutoRelater } from './auto-relater';
 import { AutoWriter } from './auto-writer';
 import { AutoOptions, TableData } from './types';
 
-export class SequelizeAbsModel {
+export class SequelizeModel {
   sequelize: Sequelize;
   options: AutoOptions;
 
@@ -100,6 +100,6 @@ export class SequelizeAbsModel {
     }
   }
 }
-module.exports = SequelizeAbsModel;
-module.exports.SequelizeAbsModel = SequelizeAbsModel;
-module.exports.default = SequelizeAbsModel;
+module.exports = SequelizeModel;
+module.exports.SequelizeModel = SequelizeModel;
+module.exports.default = SequelizeModel;
