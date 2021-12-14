@@ -1,14 +1,29 @@
 module.exports = {
+  root: true,
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 2020,
+    sourceType: 'module',
+  },
+  settings: {
+    react: {
+      version: 'detect',
+    },
+  },
   env: {
     browser: true,
-    commonjs: true,
-    es2021: true,
+    amd: true,
+    node: true,
   },
-  extends: ['airbnb-base'],
-  parserOptions: {
-    ecmaVersion: 12,
-  },
+  extends: [
+    'eslint:recommended',
+    'plugin:prettier/recommended', // Make sure this is always the last element in the array.
+  ],
+  plugins: ['simple-import-sort', 'prettier'],
   rules: {
-    'no-console': 0,
+    'prettier/prettier': ['error', {}, { usePrettierrc: true }],
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    'simple-import-sort/imports': 'error',
+    'simple-import-sort/exports': 'error',
   },
 };

@@ -1,70 +1,82 @@
+import _ from 'lodash';
+import { Dialect, Sequelize } from 'sequelize';
 
-import _ from "lodash";
-import { Dialect, Sequelize } from "sequelize";
-import { AutoBuilder } from "./auto-builder";
-import { AutoGenerator } from "./auto-generator";
-import { AutoRelater } from "./auto-relater";
-import { AutoWriter } from "./auto-writer";
-import { dialects } from "./dialects/dialects";
-import { AutoOptions, TableData, getYYYYMMDDHHMMSS } from "./types";
+import { dialects } from './../dialects/dialects';
+import { AutoBuilder } from './auto-builder';
+import { AutoGenerator } from './auto-generator';
+import { AutoRelater } from './auto-relater';
+import { AutoWriter } from './auto-writer';
+import { AutoOptions, getYYYYMMDDHHMMSS, TableData } from './types';
 export class SequelizeAbsMigrate {
   sequelize: Sequelize;
   options: AutoOptions;
 
-  constructor(database: string | Sequelize, username: string, password: string, options: AutoOptions) {
-
+  constructor(
+    database: string | Sequelize,
+    username: string,
+    password: string,
+    options: AutoOptions,
+  ) {
     if (database instanceof Sequelize) {
       this.sequelize = database;
     } else {
       this.sequelize = new Sequelize(database, username, password, options || {});
     }
-    if(options.migrationTimestamp) {
-      if(options.migrationTimestamp.toString().length!==14) 
-      {
-        options.migrationTimestamp = getYYYYMMDDHHMMSS();  
+    if (options.migrationTimestamp) {
+      if (options.migrationTimestamp.toString().length !== 14) {
+        options.migrationTimestamp = getYYYYMMDDHHMMSS();
       }
     } else {
       options.migrationTimestamp = getYYYYMMDDHHMMSS();
     }
 
-    this.options = _.extend({
-      spaces: true,
-      indentation: 2,
-      directory: './models',
-      additional: {},
-      host: 'localhost',
-      port: this.getDefaultPort(options.dialect),
-      closeConnectionAutomatically: true
-    }, options || {});
+    this.options = _.extend(
+      {
+        spaces: true,
+        indentation: 2,
+        directory: './models',
+        additional: {},
+        host: 'localhost',
+        port: this.getDefaultPort(options.dialect),
+        closeConnectionAutomatically: true,
+      },
+      options || {},
+    );
 
     if (!this.options.directory) {
       this.options.noWrite = true;
     }
-
   }
 
   async run(): Promise<TableData> {
     let td = await this.build();
     let type = {};
     td = this.relate(td);
+
+    // // write the individual model files
+    // let timestamp = getYYYYMMDDHHMMSS();
+    // if(this.options.migrationTimestamp) {
+    //   timestamp = this.options.migrationTimestamp;
+    // }
+
     const tt = this.generateMigration(td, type);
     td.text = tt;
     await this.write(td, type);
-    
+
     // generate forignkey migrations
     type = {
       forignKeys: true,
-    }
+    };
     const tg = this.generateConstraint(td, type);
     td.text = tg;
     await this.write(td, type);
-    
+
     return td;
   }
 
   build(): Promise<TableData> {
     const builder = new AutoBuilder(this.sequelize, this.options);
-    return builder.build().then(tableData => {
+    return builder.build().then((tableData) => {
       if (this.options.closeConnectionAutomatically) {
         return this.sequelize.close().then(() => tableData);
       }
@@ -102,7 +114,6 @@ export class SequelizeAbsMigrate {
         return 3306;
     }
   }
-
 }
 module.exports = SequelizeAbsMigrate;
 module.exports.SequelizeAbsMigrate = SequelizeAbsMigrate;

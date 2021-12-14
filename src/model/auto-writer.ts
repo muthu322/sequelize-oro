@@ -1,9 +1,22 @@
-import fs from "fs";
-import _ from "lodash";
-import path from "path";
-import util from "util";
-import { FKSpec, TableData } from ".";
-import { AutoOptions, CaseFileOption, CaseOption, LangOption, makeIndent, makeTableName, pluralize, qNameSplit, recase, Relation, getYYYYMMDDHHMMSS } from "./types";
+import fs from 'fs';
+import _ from 'lodash';
+import path from 'path';
+import util from 'util';
+
+import { FKSpec } from './../dialects/dialect-options';
+import { TableData } from './types';
+import {
+  AutoOptions,
+  CaseFileOption,
+  CaseOption,
+  LangOption,
+  makeIndent,
+  makeTableName,
+  pluralize,
+  qNameSplit,
+  recase,
+  Relation,
+} from './types';
 const mkdirp = require('mkdirp');
 
 /** Writes text into files from TableData.text, and writes init-models */
@@ -12,7 +25,6 @@ export class AutoWriter {
   foreignKeys: { [tableName: string]: { [fieldName: string]: FKSpec } };
   relations: Relation[];
   space: string[];
-  type: any;
   options: {
     caseFile?: CaseFileOption;
     caseModel?: CaseOption;
@@ -20,52 +32,58 @@ export class AutoWriter {
     directory: string;
     lang?: LangOption;
     noAlias?: boolean;
+    noInitModels?: boolean;
     noWrite?: boolean;
     singularize?: boolean;
     useDefine?: boolean;
     spaces?: boolean;
     indentation?: number;
-    migrationTimestamp?: number;
   };
-  constructor(tableData: TableData, options: AutoOptions, type:any) {
+  constructor(tableData: TableData, options: AutoOptions) {
     this.tableText = tableData.text as { [name: string]: string };
     this.foreignKeys = tableData.foreignKeys;
     this.relations = tableData.relations;
     this.options = options;
-    this.type = type;
     this.space = makeIndent(this.options.spaces, this.options.indentation);
   }
 
   write() {
-
     if (this.options.noWrite) {
       return Promise.resolve();
     }
 
-    mkdirp.sync(path.resolve(this.options.directory || "./models"));
+    mkdirp.sync(path.resolve(this.options.directory || './models'));
 
     const tables = _.keys(this.tableText);
 
     // write the individual model files
-    let timestamp = getYYYYMMDDHHMMSS();
-    if(this.options.migrationTimestamp) {
-      timestamp = this.options.migrationTimestamp;
-    }
-    const promises = tables.map(t => {
-      ++timestamp;
-      console.log(t, timestamp);
-      return this.createFile(t, timestamp);
+    const promises = tables.map((t) => {
+      return this.createFile(t);
     });
 
     const isTypeScript = this.options.lang === 'ts';
-    const assoc = this.createAssociations(isTypeScript);
+    const assoc = this.createAssociations();
 
     // get table names without schema
     // TODO: add schema to model and file names when schema is non-default for the dialect
-    const tableNames = tables.map(t => {
-      const [schemaName, tableName] = qNameSplit(t);
-      return tableName as string;
-    }).sort();
+    const tableNames = tables
+      .map((t) => {
+        const [tableName] = qNameSplit(t);
+        return tableName as string;
+      })
+      .sort();
+
+    // write the init-models file
+    if (!this.options.noInitModels) {
+      const initString = this.createInitString(tableNames, assoc, this.options.lang);
+      const initFilePath = path.join(
+        this.options.directory,
+        'init-models' + (isTypeScript ? '.ts' : '.js'),
+      );
+      const writeFile = util.promisify(fs.writeFile);
+      const initPromise = writeFile(path.resolve(initFilePath), initString);
+      promises.push(initPromise);
+    }
 
     return Promise.all(promises);
   }
@@ -76,36 +94,34 @@ export class AutoWriter {
       case 'esm':
         return this.createESMInitString(tableNames, assoc);
       case 'es6':
-          return this.createES5InitString(tableNames, assoc, "const");
+        return this.createES5InitString(tableNames, assoc, 'const');
       default:
-        return this.createES5InitString(tableNames, assoc, "var");
+        return this.createES5InitString(tableNames, assoc, 'var');
     }
   }
-  private createFile(table: string, timestamp:any) {
+  private createFile(table: string) {
     // FIXME: schema is not used to write the file name and there could be collisions. For now it
     // is up to the developer to pick the right schema, and potentially chose different output
     // folders for each different schema.
-    const [schemaName, tableName] = qNameSplit(table);
-    let fileName = recase(this.options.caseFile, tableName, this.options.singularize);
-    if(this.type.forignKeys) {
-      fileName = timestamp +'-'+ fileName+'-forignKeys';
-    } else {
-      fileName = timestamp +'-'+ fileName;
-    }
-    const filePath = path.join(this.options.directory, fileName + (this.options.lang === 'ts' ? '.ts' : '.js'));
+    const [tableName] = qNameSplit(table);
+    const fileName = recase(this.options.caseFile, tableName, this.options.singularize);
+    const filePath = path.join(
+      this.options.directory,
+      fileName + (this.options.lang === 'ts' ? '.ts' : '.js'),
+    );
 
     const writeFile = util.promisify(fs.writeFile);
     return writeFile(path.resolve(filePath), this.tableText[table]);
   }
 
   /** Create the belongsToMany/belongsTo/hasMany/hasOne association strings */
-  private createAssociations(typeScript: boolean) {
-    let strBelongs = "";
-    let strBelongsToMany = "";
+  private createAssociations() {
+    let strBelongs = '';
+    let strBelongsToMany = '';
     const sp = this.space[1];
 
     const rels = this.relations;
-    rels.forEach(rel => {
+    rels.forEach((rel) => {
       if (rel.isM2M) {
         const asprop = recase(this.options.caseProp, pluralize(rel.childProp));
         strBelongsToMany += `${sp}${rel.parentModel}.belongsToMany(${rel.childModel}, { as: '${asprop}', through: ${rel.joinModel}, foreignKey: "${rel.parentId}", otherKey: "${rel.childId}" });\n`;
@@ -115,7 +131,7 @@ export class AutoWriter {
         const bAlias = this.options.noAlias ? '' : `as: "${asParentProp}", `;
         strBelongs += `${sp}${rel.childModel}.belongsTo(${rel.parentModel}, { ${bAlias}foreignKey: "${rel.parentId}"});\n`;
 
-        const hasRel = rel.isOne ? "hasOne" : "hasMany";
+        const hasRel = rel.isOne ? 'hasOne' : 'hasMany';
         // const hAlias = (this.options.noAlias && Utils.pluralize(rel.childModel.toLowerCase()) === rel.childProp.toLowerCase()) ? '' : `as: "${rel.childProp}", `;
         const asChildProp = recase(this.options.caseProp, rel.childProp);
         const hAlias = this.options.noAlias ? '' : `as: "${asChildProp}", `;
@@ -133,23 +149,28 @@ export class AutoWriter {
     const sp = this.space[1];
     const modelNames: string[] = [];
     // import statements
-    tables.forEach(t => {
+    tables.forEach((t) => {
       const fileName = recase(this.options.caseFile, t, this.options.singularize);
-      const modelName = makeTableName(this.options.caseModel, t, this.options.singularize, this.options.lang);
+      const modelName = makeTableName(
+        this.options.caseModel,
+        t,
+        this.options.singularize,
+        this.options.lang,
+      );
       modelNames.push(modelName);
       str += `import { ${modelName} as _${modelName} } from "./${fileName}";\n`;
       str += `import type { ${modelName}Attributes, ${modelName}CreationAttributes } from "./${fileName}";\n`;
     });
     // re-export the model classes
     str += '\nexport {\n';
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${sp}_${m} as ${m},\n`;
     });
     str += '};\n';
 
     // re-export the model attirbutes
     str += '\nexport type {\n';
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${sp}${m}Attributes,\n`;
       str += `${sp}${m}CreationAttributes,\n`;
     });
@@ -157,16 +178,16 @@ export class AutoWriter {
 
     // create the initialization function
     str += 'export function initModels(sequelize: Sequelize) {\n';
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${sp}const ${m} = _${m}.initModel(sequelize);\n`;
     });
 
     // add the asociations
-    str += "\n" + assoc;
+    str += '\n' + assoc;
 
     // return the models
     str += `\n${sp}return {\n`;
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${this.space[2]}${m}: ${m},\n`;
     });
     str += `${sp}};\n`;
@@ -181,25 +202,30 @@ export class AutoWriter {
     const sp = this.space[1];
     const modelNames: string[] = [];
     // import statements
-    tables.forEach(t => {
+    tables.forEach((t) => {
       const fileName = recase(this.options.caseFile, t, this.options.singularize);
-      const modelName = makeTableName(this.options.caseModel, t, this.options.singularize, this.options.lang);
+      const modelName = makeTableName(
+        this.options.caseModel,
+        t,
+        this.options.singularize,
+        this.options.lang,
+      );
       modelNames.push(modelName);
       str += `${vardef} _${modelName} = require("./${fileName}");\n`;
     });
 
     // create the initialization function
     str += '\nfunction initModels(sequelize) {\n';
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${sp}${vardef} ${m} = _${m}(sequelize, DataTypes);\n`;
     });
 
     // add the asociations
-    str += "\n" + assoc;
+    str += '\n' + assoc;
 
     // return the models
     str += `\n${sp}return {\n`;
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${this.space[2]}${m},\n`;
     });
     str += `${sp}};\n`;
@@ -217,24 +243,29 @@ export class AutoWriter {
     const sp = this.space[1];
     const modelNames: string[] = [];
     // import statements
-    tables.forEach(t => {
+    tables.forEach((t) => {
       const fileName = recase(this.options.caseFile, t, this.options.singularize);
-      const modelName = makeTableName(this.options.caseModel, t, this.options.singularize, this.options.lang);
+      const modelName = makeTableName(
+        this.options.caseModel,
+        t,
+        this.options.singularize,
+        this.options.lang,
+      );
       modelNames.push(modelName);
       str += `import _${modelName} from  "./${fileName}.js";\n`;
     });
     // create the initialization function
     str += '\nexport default function initModels(sequelize) {\n';
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${sp}const ${m} = _${m}.init(sequelize, DataTypes);\n`;
     });
 
     // add the associations
-    str += "\n" + assoc;
+    str += '\n' + assoc;
 
     // return the models
     str += `\n${sp}return {\n`;
-    modelNames.forEach(m => {
+    modelNames.forEach((m) => {
       str += `${this.space[2]}${m},\n`;
     });
     str += `${sp}};\n`;
