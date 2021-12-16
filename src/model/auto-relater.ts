@@ -63,7 +63,7 @@ export class AutoRelater {
     spec: FKSpec,
     fkFields: { [fieldName: string]: FKSpec },
   ) {
-    const [schemaName, tableName] = qNameSplit(table);
+    const { schemaName, tableName } = qNameSplit(table);
     const schema = schemaName as string;
     const modelName = recase(this.caseModel, tableName, this.singularize);
 

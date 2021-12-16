@@ -57,8 +57,6 @@ export class AutoWriter {
     mkdirp.sync(path.resolve(this.options.directory || './models'));
 
     const tables = _.keys(this.tableText).sort();
-    console.log('tables');
-    console.log(tables);
 
     const promises = tables.map((t) => {
       if (this.options.migrationTimestamp) {
@@ -96,7 +94,7 @@ export class AutoWriter {
     // FIXME: schema is not used to write the file name and there could be collisions. For now it
     // is up to the developer to pick the right schema, and potentially chose different output
     // folders for each different schema.
-    const [tableName] = qNameSplit(table);
+    const { tableName } = qNameSplit(table);
     let fileName = recase(this.options.caseFile, tableName, this.options.singularize);
     if (this.type.forignKeys) {
       fileName = timestamp + '-' + fileName + '-forignKeys';

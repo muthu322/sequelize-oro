@@ -82,7 +82,7 @@ export class AutoGenerator {
     const text: { [name: string]: string } = {};
     tableNames.forEach((table) => {
       let str = header;
-      const [tableNameOrig] = qNameSplit(table);
+      const { tableName: tableNameOrig } = qNameSplit(table);
       if (tableNameOrig) {
         str += this.addMigrationTable(table);
         const re = new RegExp('#TABLE#', 'g');
@@ -96,7 +96,7 @@ export class AutoGenerator {
   }
   // Create a string for the model of the table
   private addMigrationTable(table: string) {
-    const [schemaName, tableNameOrig] = qNameSplit(table);
+    const { schemaName, tableName: tableNameOrig } = qNameSplit(table);
     const space = this.space;
     let timestamps =
       (this.options.additional && this.options.additional.timestamps === true) || false;
@@ -531,7 +531,7 @@ export class AutoGenerator {
           }
           str += `${space[4]}],\n`;
           // query options
-          str += `${space[4]}{ transaction },\n`;
+          str += `${space[4]}{ transaction, force: true },\n`;
           str += `${space[3]});\n`;
         }
         // create trigger query from triggerschema
@@ -619,7 +619,7 @@ export class AutoGenerator {
     const text: { [name: string]: string } = {};
     tableNames.forEach((table) => {
       let str = header;
-      const [tableNameOrig] = qNameSplit(table);
+      const { tableName: tableNameOrig } = qNameSplit(table);
       if (tableNameOrig) {
         str += this.addConstraint(table);
         const re = new RegExp('#TABLE#', 'g');
@@ -632,7 +632,7 @@ export class AutoGenerator {
     return text;
   }
   private addConstraint(table: string) {
-    const [tableNameOrig] = qNameSplit(table);
+    const { tableName: tableNameOrig } = qNameSplit(table);
     const space = this.space;
 
     // add all Up fields
@@ -943,7 +943,7 @@ export class AutoGenerator {
       // if no tables match the given table, then assume we need to fix the schema
       const first = this.relations.find((rel) => !!rel.childTable);
       if (first) {
-        const [schemaName] = qNameSplit(first.childTable);
+        const { schemaName } = qNameSplit(first.childTable);
         if (schemaName) {
           table = qNameJoin(schemaName, table);
         }

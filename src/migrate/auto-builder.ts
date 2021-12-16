@@ -7,7 +7,7 @@ import {
   DialectOptions,
   FKRow,
   FKSpec,
-  TriggerCount,
+  // TriggerCount,
 } from './../dialects/dialect-options';
 import { dialects } from './../dialects/dialects';
 import { AutoOptions } from './types';
@@ -336,17 +336,6 @@ export class AutoBuilder {
           idfield.primaryKey = true;
         }
       }
-
-      const countTriggerSql = this.dialect.countTriggerQuery(
-        table.table_name,
-        table.table_schema || '',
-      );
-      const triggerResult = await this.executeQuery<TriggerCount>(countTriggerSql);
-      const triggerCount =
-        triggerResult && triggerResult[0] && triggerResult[0].trigger_count;
-      if (triggerCount > 0) {
-        this.tableData.hasTriggerTables[makeTableQName(table)] = true;
-      }
     } catch (err) {
       console.error(err);
     }
@@ -356,6 +345,7 @@ export class AutoBuilder {
     return this.sequelize.query(query, {
       type: QueryTypes.SELECT,
       raw: true,
+      logging: false,
     }) as any as Promise<T[]>;
   }
 }

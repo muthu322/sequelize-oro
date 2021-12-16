@@ -3,7 +3,7 @@ import { check as isReserved } from 'reserved-words';
 import { Utils } from 'sequelize';
 import { ColumnDescription, Dialect } from 'sequelize/types';
 
-import { FKSpec } from './../dialects/dialect-options';
+// import { FKSpec } from './../dialects/dialect-options';
 
 export interface Table {
   name?: string;
@@ -78,25 +78,18 @@ export interface Relation {
 }
 
 export class TableData {
-  /** Fields for each table; indexed by schemaName.tableName */
+  tableName: string;
   tables: { [tableName: string]: { [fieldName: string]: ColumnDescription } };
-  /** Foreign keys for each table; indexed by schemaName.tableName */
-  foreignKeys: { [tableName: string]: { [fieldName: string]: FKSpec } };
-  junction: any;
-  /** Flag `true` for each table that has any trigger.  This affects how Sequelize performs updates. */
-  hasTriggerTables: { [tableName: string]: boolean };
-  /** Indexes for each table; indexed by schemaName.tableName */
   indexes: { [tableName: string]: IndexSpec[] };
-  /** Relations between models, computed from foreign keys */
-  relations: Relation[];
-  /** Text to be written to the model files, indexed by schemaName.tableName */
-  text?: { [name: string]: string };
+  tableSchema: string;
+  timestamp: number;
+  text?: string;
   constructor() {
     this.tables = {};
-    this.foreignKeys = {};
     this.indexes = {};
-    this.hasTriggerTables = {};
-    this.relations = [];
+    this.tableName = '';
+    this.tableSchema = '';
+    this.timestamp = 0;
   }
 }
 
@@ -134,6 +127,35 @@ export declare type CaseOption = 'c' | 'l' | 'o' | 'p' | 'u';
  */
 export declare type CaseFileOption = 'k' | CaseOption;
 
+enum Sqlconditions {
+  '=',
+  '!=',
+  'IS',
+  'IS NOT',
+  'LIKE',
+  'ILIKE',
+  'IN',
+  'NOT IN',
+  'REGEXP',
+}
+
+export interface TableOptions {
+  [key: string]: {
+    limit?: number;
+    conditions?: Array<{
+      column: string;
+      value: any;
+      condition: Sqlconditions;
+      quotes: boolean;
+    }>;
+    columnDef?: {
+      [key: string]: {
+        skip?: boolean;
+        value?: any;
+      };
+    };
+  };
+}
 export interface AutoOptions {
   additional?: any;
   /** Case of file names */
@@ -192,6 +214,12 @@ export interface AutoOptions {
   pkSuffixes?: string[];
   /** Use `sequelize.define` instead of `init` for model initialization.  See issues #527, #559, #573 */
   useDefine: boolean;
+  /** Seeder TimeStamp */
+  seederTimestamp?: number;
+  /** Migration TimeStamp */
+  orderTables?: string[];
+  /** Table Options */
+  tableOptions: TableOptions;
 }
 
 export type TSField = { special: string[]; elementType: string } & ColumnDescription;

@@ -5,11 +5,12 @@ import {
   ColumnElementType,
   ColumnPrecision,
   DialectOptions,
-  FKRow,
-  FKSpec,
+  // FKRow,
+  // FKSpec,
   TriggerCount,
 } from './../dialects/dialect-options';
 import { dialects } from './../dialects/dialects';
+import { AutoGenerator } from './auto-generator';
 import { AutoOptions } from './types';
 import { Field, IndexSpec, Table, TableData } from './types';
 
@@ -23,6 +24,7 @@ export class AutoBuilder {
   schema?: string;
   views: boolean;
   tableData: TableData;
+  options: AutoOptions;
 
   constructor(sequelize: Sequelize, options: AutoOptions) {
     this.sequelize = sequelize;
@@ -32,7 +34,7 @@ export class AutoBuilder {
     this.skipTables = options.skipTables;
     this.schema = options.schema;
     this.views = !!options.views;
-
+    this.options = options;
     this.tableData = new TableData();
   }
 
@@ -43,18 +45,6 @@ export class AutoBuilder {
       prom = this.executeQuery<string>(showTablesSql);
     } else {
       prom = this.queryInterface.showAllTables();
-    }
-
-    if (this.views) {
-      // Add views to the list of tables
-      prom = prom.then((tr) => {
-        // in mysql, use database name instead of schema
-        const vschema =
-          this.dialect.name === 'mysql' ? this.sequelize.getDatabaseName() : this.schema;
-
-        const showViewsSql = this.dialect.showViewsQuery(vschema);
-        return this.executeQuery<string>(showViewsSql).then((tr2) => tr.concat(tr2));
-      });
     }
 
     return prom
@@ -89,100 +79,80 @@ export class AutoBuilder {
       tables = _.differenceWith(tables, skipTables, isTableEqual);
     }
 
-    const promises = tables.map((t) => {
-      return this.mapForeignKeys(t).then(() => {
-        // console.log('MAP FORKEY JUNC WORKING');
-        return this.mapForeignKeysJunction(t).then(() => {
-          // console.log('MAP TABLE WORKING');
-          return this.mapTable(t);
-        });
+    // sort seeder tables
+    let sortedCollection;
+    if (this.options.orderTables) {
+      const firstArray = this.options.orderTables;
+      const last = tables.length;
+      sortedCollection = _.sortBy(tables, function (item) {
+        return firstArray.indexOf(item.table_name) !== -1
+          ? firstArray.indexOf(item.table_name)
+          : last;
       });
+    } else if (this.options.tables) {
+      const firstArray = this.options.tables;
+      const last = tables.length;
+      sortedCollection = _.sortBy(tables, function (item) {
+        return firstArray.indexOf(item.table_name) !== -1
+          ? firstArray.indexOf(item.table_name)
+          : last;
+      });
+    } else {
+      sortedCollection = tables;
+    }
+
+    const promises = sortedCollection.map(async (t) => {
+      if (this.options.seederTimestamp) {
+        this.options.seederTimestamp++;
+        const timestamp = this.options.seederTimestamp;
+        await this.getDataTable(t, timestamp);
+      }
     });
 
     return Promise.all(promises).then(() => this.tableData);
   }
 
-  private mapForeignKeysJunction(table: Table) {
-    const tableQname = makeTableQName(table);
-
-    const sql = this.dialect.getForeignKeysJunction(
-      table.table_name,
-      table.table_schema || this.sequelize.getDatabaseName(),
-    );
-
-    // const dialect = this.dialect;
-    // const junction = this.tableData.junction;
-    // this.tableData.test = 'Muthukumar '+tableQname;
-    // this.tableData.junction[tableQname] = {};
-    this.tableData.junction = this.tableData.junction || {};
-    return this.executeQuery(sql)
-      .then((res) => {
-        // res.forEach(assignColumnDetails);
-        // console.log('MYJUNCTION');
-        // console.log(res);
-        this.tableData.junction[tableQname] = res;
-      })
-      .catch((err) => console.error(err));
-    // function assignColumnDetails(row, ix, rows) {
-    //     let ref = row;
-    //     junction[tableQname] = junction[tableQname] || {};
-    //     junction[tableQname] = lodash_1.default.assign({}, junction[tableQname], ref);
-    // }
-  }
-
-  private mapForeignKeys(table: Table) {
-    const tableQname = makeTableQName(table);
-    const sql = this.dialect.getForeignKeysQuery(
-      table.table_name,
-      table.table_schema || this.sequelize.getDatabaseName(),
-    );
-    const dialect = this.dialect;
-    const foreignKeys = this.tableData.foreignKeys;
-
-    return this.executeQuery<FKRow>(sql)
-      .then((res) => {
-        res.forEach(assignColumnDetails);
-      })
-      .catch((err) => console.error(err));
-
-    function assignColumnDetails(row: FKRow, ix: number, rows: FKRow[]) {
-      let ref: FKSpec;
-      if (dialect.remapForeignKeysRow) {
-        ref = dialect.remapForeignKeysRow(table.table_name, row) as FKSpec;
-      } else {
-        ref = row as any as FKSpec;
-      }
-
-      if (
-        !_.isEmpty(_.trim(ref.source_column)) &&
-        !_.isEmpty(_.trim(ref.target_column))
-      ) {
-        ref.isForeignKey = true;
-        ref.foreignSources = _.pick(ref, [
-          'source_table',
-          'source_schema',
-          'target_schema',
-          'target_table',
-          'source_column',
-          'target_column',
-        ]);
-      }
-      if (dialect.isUnique && dialect.isUnique(ref as any as FKRow, rows)) {
-        ref.isUnique = ref.constraint_name || true;
-      }
-      if (_.isFunction(dialect.isPrimaryKey) && dialect.isPrimaryKey(ref)) {
-        ref.isPrimaryKey = true;
-      }
-      if (dialect.isSerialKey && dialect.isSerialKey(ref)) {
-        ref.isSerialKey = true;
-      }
-      foreignKeys[tableQname] = foreignKeys[tableQname] || {};
-      foreignKeys[tableQname][ref.source_column] = _.assign(
-        {},
-        foreignKeys[tableQname][ref.source_column],
-        ref,
-      );
+  private async getDataTable(table: Table, timestamp: number) {
+    // const tableQname = makeTableQName(table);
+    const limit = 0;
+    let tableOptions = {};
+    // console.log(this.options);
+    if (this.options.tableOptions && this.options.tableOptions[table.table_name]) {
+      tableOptions = this.options.tableOptions[table.table_name];
     }
+    const triggerResult = await this.executeQuery<TriggerCount>(
+      this.dialect.getTotalRows(
+        table.table_name,
+        table.table_schema || this.sequelize.getDatabaseName(),
+        tableOptions,
+      ),
+    );
+    const count = triggerResult && triggerResult[0] && triggerResult[0].trigger_count;
+    let totalPages = 1;
+    if (limit > 0) {
+      totalPages = Math.ceil(count / limit);
+    }
+    const promises = [];
+    for (let page = 1; page <= totalPages; page += 1) {
+      const sql = this.dialect.getDataTable(
+        table.table_name,
+        'id',
+        page - 1,
+        limit,
+        tableOptions,
+        table.table_schema || this.sequelize.getDatabaseName(),
+      );
+      const data = await this.executeQuery(sql);
+      let tableData = {
+        tableName: table.table_name,
+        tableSchema: table.table_schema,
+        fields: await this.mapTable(table),
+        timestamp,
+      };
+      // tableData = Object.assign(tableData, this.tableData);
+      promises.push(this.generator(tableData, data));
+    }
+    return await Promise.all(promises);
   }
 
   private async mapTable(table: Table) {
@@ -191,7 +161,7 @@ export class AutoBuilder {
         table.table_name,
         table.table_schema,
       );
-      this.tableData.tables[makeTableQName(table)] = fields;
+      // this.tableData.tables[makeTableQName(table)] = fields;
 
       // for postgres array or user-defined types, get element type
       if (
@@ -297,27 +267,22 @@ export class AutoBuilder {
           idfield.primaryKey = true;
         }
       }
-
-      const countTriggerSql = this.dialect.countTriggerQuery(
-        table.table_name,
-        table.table_schema || '',
-      );
-      const triggerResult = await this.executeQuery<TriggerCount>(countTriggerSql);
-      const triggerCount =
-        triggerResult && triggerResult[0] && triggerResult[0].trigger_count;
-      if (triggerCount > 0) {
-        this.tableData.hasTriggerTables[makeTableQName(table)] = true;
-      }
+      return fields;
     } catch (err) {
       console.error(err);
     }
+  }
+
+  private async generator(tableData: any, row: any) {
+    const generator = new AutoGenerator(tableData, row, this.options);
+    return generator.generateText();
   }
 
   private executeQuery<T>(query: string): Promise<T[]> {
     return this.sequelize.query(query, {
       type: QueryTypes.SELECT,
       raw: true,
-      logging: false,
+      // logging: false,
     }) as any as Promise<T[]>;
   }
 }

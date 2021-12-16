@@ -94,8 +94,8 @@ export class TableData {
   text?: { [name: string]: string };
   constructor() {
     this.tables = {};
-    this.foreignKeys = {};
     this.indexes = {};
+    this.foreignKeys = {};
     this.hasTriggerTables = {};
     this.relations = [];
   }
@@ -105,9 +105,9 @@ export class TableData {
 export function qNameSplit(qname: string) {
   if (qname.indexOf('.') > 0) {
     const [schemaName, tableNameOrig] = qname.split('.');
-    return [schemaName, tableNameOrig];
+    return { schemaName, tableName: tableNameOrig };
   }
-  return [null, qname];
+  return { schemaName: null, tableName: qname };
 }
 
 /** Get combined schema.table name */

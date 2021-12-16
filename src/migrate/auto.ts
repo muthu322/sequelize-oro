@@ -34,7 +34,7 @@ export class SequelizeMigrate {
       {
         spaces: true,
         indentation: 2,
-        directory: './models',
+        directory: './db/migrations',
         additional: {},
         host: 'localhost',
         port: this.getDefaultPort(options.dialect),

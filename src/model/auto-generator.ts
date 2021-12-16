@@ -26,10 +26,10 @@ import {
 export class AutoGenerator {
   dialect: DialectOptions;
   tables: { [tableName: string]: { [fieldName: string]: ColumnDescription } };
+  indexes: { [tableName: string]: IndexSpec[] };
   foreignKeys: { [tableName: string]: { [fieldName: string]: FKSpec } };
   junction: any;
   hasTriggerTables: { [tableName: string]: boolean };
-  indexes: { [tableName: string]: IndexSpec[] };
   relations: Relation[];
   space: string[];
   options: {
@@ -49,10 +49,10 @@ export class AutoGenerator {
 
   constructor(tableData: TableData, dialect: DialectOptions, options: AutoOptions) {
     this.tables = tableData.tables;
+    this.indexes = tableData.indexes;
     this.foreignKeys = tableData.foreignKeys;
     this.junction = tableData.junction;
     this.hasTriggerTables = tableData.hasTriggerTables;
-    this.indexes = tableData.indexes;
     this.relations = tableData.relations;
     this.dialect = dialect;
     this.options = options;
@@ -105,7 +105,7 @@ export class AutoGenerator {
     const text: { [name: string]: string } = {};
     tableNames.forEach((table) => {
       let str = header;
-      const [tableNameOrig] = qNameSplit(table);
+      const { tableName: tableNameOrig } = qNameSplit(table);
       const tableName = makeTableName(
         this.options.caseModel,
         tableNameOrig,
@@ -118,7 +118,7 @@ export class AutoGenerator {
         const needed = _.keys(associations.needed).sort();
         needed.forEach((fkTable) => {
           const set = associations.needed[fkTable];
-          const [fkTableName] = qNameSplit(fkTable);
+          const { tableName: fkTableName } = qNameSplit(fkTable);
           const filename = recase(
             this.options.caseFile,
             fkTableName,
@@ -182,7 +182,7 @@ export class AutoGenerator {
 
   // Create a string for the model of the table
   private addTable(table: string) {
-    const [schemaName, tableNameOrig] = qNameSplit(table);
+    const { schemaName, tableName: tableNameOrig } = qNameSplit(table);
     const space = this.space;
     let timestamps =
       (this.options.additional && this.options.additional.timestamps === true) || false;
@@ -575,7 +575,7 @@ export class AutoGenerator {
   private getSqType(fieldObj: Field, attr: string): string {
     const attrValue = (fieldObj as any)[attr];
     if (!attrValue.toLowerCase) {
-      console.log('attrValue', attr, attrValue);
+      // console.log('attrValue', attr, attrValue);
       return attrValue;
     }
     const type: string = attrValue.toLowerCase();
@@ -668,7 +668,7 @@ export class AutoGenerator {
       val = 'DataTypes.MACADDR';
     } else if (type.match(/^enum(\(.*\))?$/)) {
       const enumValues = this.getEnumValues(fieldObj);
-      val = `DataTypes.ENUM(${enumValues})`;
+      val = `DataTypes.ENUM(${enumValues.join(', ')})`;
     }
 
     return val as string;
@@ -702,7 +702,7 @@ export class AutoGenerator {
       // if no tables match the given table, then assume we need to fix the schema
       const first = this.relations.find((rel) => !!rel.childTable);
       if (first) {
-        const [schemaName] = qNameSplit(first.childTable);
+        const { schemaName } = qNameSplit(first.childTable);
         if (schemaName) {
           table = qNameJoin(schemaName, table);
         }
@@ -747,14 +747,16 @@ export class AutoGenerator {
               })}',\n`;
               str += `${space[2]}});\n`;
             } else {
-              str += `// #TABLE#.belongsTo(models.${tableName}, {\n`;
-              str += `// foreignKey: '${rel.source_column}',\n`;
-              str += `// sourceKey: '${rel.target_column}',\n`;
-              str += `// as: '${replace(recase('c', rel.source_column), {
-                Id: '',
-                id: '',
-              })}',\n`;
-              str += '// });\n';
+              str += space[2] + `// #TABLE#.belongsTo(models.${tableName}, {\n`;
+              str += space[2] + `// foreignKey: '${rel.source_column}',\n`;
+              str += space[2] + `// sourceKey: '${rel.target_column}',\n`;
+              str +=
+                space[2] +
+                `// as: '${replace(recase('c', rel.source_column), {
+                  Id: '',
+                  id: '',
+                })}',\n`;
+              str += space[2] + '// });\n';
             }
           }
 
@@ -990,7 +992,7 @@ export class AutoGenerator {
   private getEnumValues(fieldObj: TSField): string[] {
     if (fieldObj.special) {
       // postgres
-      return fieldObj.special.map((v) => `"${v}"`);
+      return fieldObj.special.map((v) => `'${v}'`);
     } else {
       // mysql
       return fieldObj.type.substring(5, fieldObj.type.length - 1).split(',');

@@ -187,7 +187,98 @@ export const postgresOptions: DialectOptions = {
             WHERE table_type = 'BASE TABLE'
             AND table_schema NOT IN ('pg_catalog', 'information_schema')
             AND table_name != 'spatial_ref_sys' AND table_name!='SequelizeMeta'
-              ${makeCondition('table_schema', schemaName)}`;
+              ${makeCondition('table_schema', schemaName)} order by table_name`;
+  },
+
+  getDataTable: (
+    tableName: string,
+    order: string,
+    page: number,
+    limit: number,
+    options: any,
+    schemaName?: string,
+  ) => {
+    const offset = page * limit;
+    let sql = `SELECT *
+    FROM "${schemaName}"."${tableName}" WHERE 1=1`;
+    if (options) {
+      if (options.conditions) {
+        options.conditions.forEach((option: any) => {
+          switch (option.condition) {
+            case '=':
+            case '!=':
+            case 'LIKE':
+            case 'ILIKE':
+            case 'REGEXP':
+              if (option.quotes && option.quotes == false) {
+                sql += ` AND ${option.column} ${option.condition} ${option.value}`;
+              } else {
+                sql += ` AND ${option.column} ${option.condition} '${option.value}'`;
+              }
+              break;
+            case 'IS':
+            case 'IS NOT':
+              sql += ` AND ${option.column} ${option.condition} ${option.value}`;
+              break;
+            case 'IN':
+            case 'NOT IN':
+              if (Array.isArray(option.value)) {
+                const arrayVal = "'" + option.value.join("','") + "'";
+                sql += ` AND ${option.column} ${option.condition} (${arrayVal})`;
+              } else if (typeof option.value === 'string') {
+                sql += ` AND ${option.column} ${option.condition} ${option.value}`;
+              }
+          }
+        });
+      }
+    }
+    sql += ` ORDER BY ${order}`;
+    if (offset > 0) {
+      sql += ` OFFSET ${offset}`;
+    }
+    if (limit > 0) {
+      sql += ` LIMIT ${limit}`;
+    }
+    // console.log(sql);
+    return sql;
+  },
+  getTotalRows: (tableName: string, schemaName?: string, options?: any) => {
+    let sql = `SELECT COUNT(0) AS trigger_count FROM "${schemaName}"."${tableName}" WHERE 1=1`;
+    console.log('options');
+    console.log(options);
+    if (options) {
+      if (options.conditions) {
+        options.conditions.forEach((option: any) => {
+          switch (option.condition) {
+            case '=':
+            case '!=':
+            case 'LIKE':
+            case 'ILIKE':
+            case 'REGEXP':
+              if (option.quotes && option.quotes == false) {
+                sql += ` AND ${option.column} ${option.condition} ${option.value}`;
+              } else {
+                sql += ` AND ${option.column} ${option.condition} '${option.value}'`;
+              }
+              break;
+            case 'IS':
+            case 'IS NOT':
+              sql += ` AND ${option.column} ${option.condition} ${option.value}`;
+              break;
+            case 'IN':
+            case 'NOT IN':
+              if (Array.isArray(option.value)) {
+                const arrayVal = "'" + option.value.join("','") + "'";
+                sql += ` AND ${option.column} ${option.condition} (${arrayVal})`;
+              } else if (typeof option.value === 'string') {
+                sql += ` AND ${option.column} ${option.condition} ${option.value}`;
+              }
+          }
+        });
+      }
+    }
+    // console.log(sql);
+    return sql;
   },
 
   showViewsQuery: (schemaName?: string) => {

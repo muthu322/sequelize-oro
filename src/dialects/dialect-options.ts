@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { Utils } from 'sequelize';
 
 export interface DialectOptions {
@@ -5,6 +6,15 @@ export interface DialectOptions {
   hasSchema: boolean;
 
   getForeignKeysQuery: (tableName: string, schemaName: string) => string;
+  getTotalRows: (tableName: string, schemaName: string, options: any) => string;
+  getDataTable: (
+    tableName: string,
+    order: string,
+    page: number,
+    limit: number,
+    options: any,
+    schemaName: string,
+  ) => string;
   getTriggers: (tableName: string, schemaName: string) => string;
   remapForeignKeysRow?: (tableName: string, row: FKRow) => FKRelation;
   getForeignKeysJunction: (tableName: string, schemaName: string) => string;

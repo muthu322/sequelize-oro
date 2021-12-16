@@ -54,24 +54,20 @@ export class AutoWriter {
 
     mkdirp.sync(path.resolve(this.options.directory || './models'));
 
-    const tables = _.keys(this.tableText);
-
+    const tables = _.keys(this.tableText).sort();
     // write the individual model files
     const promises = tables.map((t) => {
       return this.createFile(t);
     });
-
     const isTypeScript = this.options.lang === 'ts';
     const assoc = this.createAssociations();
 
     // get table names without schema
     // TODO: add schema to model and file names when schema is non-default for the dialect
-    const tableNames = tables
-      .map((t) => {
-        const [tableName] = qNameSplit(t);
-        return tableName as string;
-      })
-      .sort();
+    const tableNames = tables.map((t) => {
+      const { tableName } = qNameSplit(t);
+      return tableName as string;
+    });
 
     // write the init-models file
     if (!this.options.noInitModels) {
@@ -103,7 +99,7 @@ export class AutoWriter {
     // FIXME: schema is not used to write the file name and there could be collisions. For now it
     // is up to the developer to pick the right schema, and potentially chose different output
     // folders for each different schema.
-    const [tableName] = qNameSplit(table);
+    const { tableName } = qNameSplit(table);
     const fileName = recase(this.options.caseFile, tableName, this.options.singularize);
     const filePath = path.join(
       this.options.directory,
