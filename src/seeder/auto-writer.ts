@@ -62,7 +62,6 @@ export class AutoWriter {
     // console.log(tableName, timestamp);
     const fileName = `${timestamp}-${tableName}.js`;
     const initFilePath = path.join(this.options.directory, fileName);
-    // console.log(initFilePath);
     const writeFile = util.promisify(fs.writeFile);
     const initPromise = writeFile(path.resolve(initFilePath), this.tableText);
     promises.push(initPromise);

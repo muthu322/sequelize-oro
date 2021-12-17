@@ -59,11 +59,7 @@ export class AutoWriter {
     const tables = _.keys(this.tableText).sort();
 
     const promises = tables.map((t) => {
-      if (this.options.migrationTimestamp) {
-        this.options.migrationTimestamp = this.options.migrationTimestamp + 1;
-        // console.log(t, this.options.migrationTimestamp);
-        return this.createFile(t, this.options.migrationTimestamp);
-      }
+      return this.createFile(t);
     });
 
     // const isTypeScript = this.options.lang === 'ts';
@@ -90,16 +86,16 @@ export class AutoWriter {
         return this.createES5InitString(tableNames, assoc, 'var');
     }
   }
-  private createFile(table: string, timestamp: any) {
+  private createFile(table: string) {
     // FIXME: schema is not used to write the file name and there could be collisions. For now it
     // is up to the developer to pick the right schema, and potentially chose different output
     // folders for each different schema.
     const { tableName } = qNameSplit(table);
     let fileName = recase(this.options.caseFile, tableName, this.options.singularize);
     if (this.type.forignKeys) {
-      fileName = timestamp + '-' + fileName + '-forignKeys';
+      fileName = '2-' + fileName;
     } else {
-      fileName = timestamp + '-' + fileName;
+      fileName = '1-' + fileName;
     }
     const filePath = path.join(
       this.options.directory,

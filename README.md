@@ -73,6 +73,8 @@ All Basic table data, indexes, functions, triggers, forign keys will be migrated
 node_modules/.bin/sequelize db:migrate
 ```
 
+Migrations are generated in alphabetical table order with given timestamp and after creating all basic tables it will create forign key constraint migrations.
+
 ### Model
 
 Sequelize Model generate from external config file.

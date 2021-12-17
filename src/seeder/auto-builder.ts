@@ -282,6 +282,7 @@ export class AutoBuilder {
     return this.sequelize.query(query, {
       type: QueryTypes.SELECT,
       raw: true,
+      // timezone: '+05:30',
       // logging: false,
     }) as any as Promise<T[]>;
   }

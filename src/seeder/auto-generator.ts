@@ -1,4 +1,5 @@
 import _ from 'lodash';
+import moment from 'moment';
 
 // import { ColumnDescription } from 'sequelize/types';
 import { AutoWriter } from './auto-writer';
@@ -67,21 +68,23 @@ export class AutoGenerator {
           const fieldObj = this.tableData.fields[field] as Field;
           const field_type = fieldObj.type.toLowerCase();
           let value = row[field];
-
           if (
             tableOptions &&
             this.options.tableOptions &&
             this.options.tableOptions[tableName] &&
             this.options.tableOptions[tableName].columnDef &&
-            this.options.tableOptions[tableName].columnDef![field]
+            typeof this.options.tableOptions[tableName].columnDef![field] !== 'undefined'
           ) {
-            if (this.options.tableOptions[tableName].columnDef!['field']) {
+            if (
+              typeof this.options.tableOptions[tableName].columnDef![field] !==
+              'undefined'
+            ) {
               const columnOptions =
-                this.options.tableOptions[tableName].columnDef!['field'];
+                this.options.tableOptions[tableName].columnDef![field];
               if (columnOptions.skip) {
                 return;
               }
-              if (columnOptions.value) {
+              if (typeof columnOptions.value !== 'undefined') {
                 value = columnOptions.value;
               }
             }
@@ -90,8 +93,16 @@ export class AutoGenerator {
           str += `${space[6]}${field}: `;
           if (this.isNumber(field_type) || this.isBoolean(field_type) || value === null) {
             str += `${value},\n`;
+          } else if (this.isDate(field_type)) {
+            value = moment(value).format('YYYY-MM-DD HH:mm:ss.SSS') + 'Z';
+            str += `'${value}',\n`;
           } else if (this.isJSON(field_type)) {
             str += "'" + JSON.stringify(value) + "',\n";
+          } else if (this.isArray(field_type)) {
+            value = value.map(function (s: string) {
+              return s.trim();
+            });
+            str += JSON.stringify(value) + ',\n';
           } else {
             str += `'${value}',\n`;
           }

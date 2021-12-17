@@ -116,7 +116,6 @@ export class AutoGenerator {
     fields.forEach((field) => {
       timestamps ||= this.isTimestampField(field);
       paranoid ||= this.isParanoidField(field);
-
       str += this.addMigrationField(table, field);
     });
     // add the table options
@@ -191,16 +190,6 @@ export class AutoGenerator {
 
   // Create a string containing field attributes (type, defaultValue, etc.)
   private addMigrationField(table: string, field: string): string {
-    // ignore Sequelize standard fields
-    const additional = this.options.additional;
-    if (
-      additional &&
-      additional.timestamps !== false &&
-      (this.isTimestampField(field) || this.isParanoidField(field))
-    ) {
-      return '';
-    }
-
     if (this.isIgnoredField(field)) {
       return '';
     }
