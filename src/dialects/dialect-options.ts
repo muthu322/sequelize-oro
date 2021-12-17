@@ -6,6 +6,7 @@ export interface DialectOptions {
   hasSchema: boolean;
 
   getForeignKeysQuery: (tableName: string, schemaName: string) => string;
+  getTwoWayForeignKeysQuery: (tableName: string, schemaName: string) => string;
   getTotalRows: (tableName: string, schemaName: string, options: any) => string;
   getDataTable: (
     tableName: string,

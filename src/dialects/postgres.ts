@@ -40,6 +40,37 @@ export const postgresOptions: DialectOptions = {
     WHERE tc.table_name = ${addTicks(tableName)}
       ${makeCondition('tc.constraint_schema', schemaName)}`;
   },
+  getTwoWayForeignKeysQuery: (tableName: string, schemaName: string) => {
+    return `SELECT DISTINCT
+    tc.constraint_name as constraint_name,
+    tc.constraint_type as constraint_type,
+    tc.constraint_schema as source_schema,
+    tc.table_name as source_table,
+    kcu.column_name as source_column,	
+    CASE ct.confupdtype WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' WHEN 'a' THEN 'NO ACTION' ELSE NULL END AS on_update,
+    CASE ct.confdeltype WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' WHEN 'a' THEN 'NO ACTION' ELSE NULL END AS on_delete,
+    ct.condeferred,
+    ct.condeferrable,
+    ccu.constraint_schema as target_schema,
+    ccu.table_name as target_table,
+    ccu.column_name as target_column,
+    co.column_default as extra,
+    co.identity_generation as generation
+    FROM information_schema.table_constraints AS tc
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.table_schema = kcu.table_schema AND tc.table_name = kcu.table_name AND tc.constraint_name = kcu.constraint_name
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_schema = tc.constraint_schema AND ccu.constraint_name = tc.constraint_name
+    JOIN information_schema.columns AS co
+      ON co.table_schema = kcu.table_schema AND co.table_name = kcu.table_name AND co.column_name = kcu.column_name
+	JOIN pg_catalog.pg_constraint as ct
+      ON ct.conname = tc.constraint_name
+    WHERE ( tc.table_name = ${addTicks(tableName)} OR ccu.table_name= ${addTicks(
+      tableName,
+    )} )
+     AND tc.constraint_type = 'FOREIGN KEY'
+      ${makeCondition('tc.constraint_schema', schemaName)}`;
+  },
 
   /**
    * Generates an SQL query that returns Junction Table for BelongstoMany Relation

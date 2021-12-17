@@ -30,6 +30,7 @@ export class AutoGenerator {
   tableData: any;
   space: string[];
   rows: any;
+  foreignKeys: any;
   options: AutoOptions;
 
   constructor(tableData: TableData, rows: any, options: AutoOptions) {
@@ -39,6 +40,7 @@ export class AutoGenerator {
     this.options = options;
     this.rows = rows;
     this.space = makeIndent(true, 2);
+    this.foreignKeys = tableData.foreignKeys;
   }
 
   async generateText() {
@@ -102,7 +104,7 @@ export class AutoGenerator {
             value = value.map(function (s: string) {
               return s.trim();
             });
-            str += JSON.stringify(value) + ',\n';
+            str += "['" + value.join("', ") + "'],\n";
           } else {
             str += `'${value}',\n`;
           }
@@ -122,20 +124,73 @@ export class AutoGenerator {
     str += `${space[3]}throw err;\n`;
     str += `${space[2]}}\n`;
     str += `${space[1]}},\n`;
-    // str += `${space[1]}down: async (queryInterface) => {\n`;
-    // // str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`;
-    // str += `${space[2]}try {\n`;
+    str += `${space[1]}down: async (queryInterface) => {\n`;
+    str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`;
+    str += `${space[2]}try {\n`;
+    str += `${space[3]}console.log('Dropping Seeders ${tableName}...');\n`;
+    // let sql = `ALTER TABLE ${tableName} DISABLE TRIGGER ALL`;
+    // str += `${space[3]}await queryInterface.sequelize.query("${sql}", { transaction });\n`;
+    str += this.addConstraint();
+    // sql = `ALTER TABLE ${tableName} ENABLE TRIGGER ALL`;
+    // str += `${space[3]}await queryInterface.sequelize.query("${sql}", { transaction });\n`;
 
-    // str += `${space[3]}console.log('Dropping Seeders ${tableName}...');\n`;
-    // // str += `${space[3]}await transaction.commit();\n`;
-    // str += `${space[2]}} catch (err) {\n`;
-    // // str += `${space[3]}await transaction.rollback();\n`;
-    // str += `${space[3]}throw err;\n`;
-    // str += `${space[2]}}\n`;
-    // str += `${space[1]}},\n`;
+    str += `${space[3]}await transaction.commit();\n`;
+    str += `${space[2]}} catch (err) {\n`;
+    str += `${space[3]}await transaction.rollback();\n`;
+    str += `${space[3]}throw err;\n`;
+    str += `${space[2]}}\n`;
+    str += `${space[1]}},\n`;
     str += `};\n`;
     this.tableData.text = str;
     await this.writeFile();
+  }
+
+  private addConstraint() {
+    const { tableName: tableNameOrig } = this.tableData;
+    const space = this.space;
+    // const tablenamewithSchema = `${tableSchema}.${tableNameOrig}`;
+    // add all Up fields
+    let str = '';
+    this.foreignKeys.forEach((field: any) => {
+      str += this.removeForignKeyRelations(field);
+    });
+    const sql = `TRUNCATE TABLE "${tableNameOrig}" RESTART IDENTITY`;
+    str += `${space[3]}await queryInterface.sequelize.query('${sql}', { transaction });\n`;
+    this.foreignKeys.forEach((field: any) => {
+      str += this.addForignKeyRelations(field);
+    });
+
+    return str;
+  }
+
+  private addForignKeyRelations(foreignKey: any): string {
+    // Find foreign key
+    let str = '';
+    const space = this.space;
+    // str += `${space[3]}console.log('${foreignKey.constraint_name}');\n`;
+    str += `${space[3]}await queryInterface.addConstraint('${foreignKey.source_table}', {\n`;
+    str += `${space[4]}type: 'foreign key',\n`;
+    str += `${space[4]}name: '${foreignKey.constraint_name}',\n`;
+    str += `${space[4]}fields: ['${foreignKey.source_column}'],\n`;
+    str += `${space[4]}references: {\n`;
+    str += `${space[5]}table: '${foreignKey.target_table}',\n`;
+    str += `${space[5]}field: '${foreignKey.target_column}',\n`;
+    str += `${space[4]}},\n`;
+    str += `${space[4]}onDelete: '${foreignKey.on_delete}',\n`;
+    str += `${space[4]}onUpdate: '${foreignKey.on_update}',\n`;
+    str += `${space[4]}transaction,\n`;
+    str += `${space[3]}});\n`;
+    return str;
+  }
+
+  private removeForignKeyRelations(foreignKey: any): string {
+    // Find foreign key
+
+    let str = '';
+    const space = this.space;
+    // str += `${space[3]}console.log('${foreignKey.constraint_name}');\n`;
+    str += `${space[3]}await queryInterface.removeConstraint('${foreignKey.source_table}', '${foreignKey.constraint_name}', { transaction });\n`;
+    return str;
   }
 
   async writeFile() {

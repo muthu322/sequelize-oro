@@ -5,8 +5,8 @@ import {
   ColumnElementType,
   ColumnPrecision,
   DialectOptions,
-  // FKRow,
-  // FKSpec,
+  FKRow,
+  FKSpec,
   TriggerCount,
 } from './../dialects/dialect-options';
 import { dialects } from './../dialects/dialects';
@@ -147,6 +147,7 @@ export class AutoBuilder {
         tableName: table.table_name,
         tableSchema: table.table_schema,
         fields: await this.mapTable(table),
+        foreignKeys: await this.mapForeignKeys(table),
         timestamp,
       };
       // tableData = Object.assign(tableData, this.tableData);
@@ -270,6 +271,63 @@ export class AutoBuilder {
       return fields;
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  private async mapForeignKeys(table: Table) {
+    // const tableQname = makeTableQName(table);
+    const sql = this.dialect.getTwoWayForeignKeysQuery(
+      table.table_name,
+      table.table_schema || this.sequelize.getDatabaseName(),
+    );
+    const dialect = this.dialect;
+    const foreignKeys: any = [];
+
+    return this.executeQuery<FKRow>(sql)
+      .then((res) => {
+        res.forEach(assignColumnDetails);
+        return foreignKeys;
+      })
+      .catch((err) => console.error(err));
+
+    function assignColumnDetails(row: FKRow, ix: number, rows: FKRow[]) {
+      let ref: FKSpec;
+      if (dialect.remapForeignKeysRow) {
+        ref = dialect.remapForeignKeysRow(table.table_name, row) as FKSpec;
+      } else {
+        ref = row as any as FKSpec;
+      }
+
+      if (
+        !_.isEmpty(_.trim(ref.source_column)) &&
+        !_.isEmpty(_.trim(ref.target_column))
+      ) {
+        ref.isForeignKey = true;
+        ref.foreignSources = _.pick(ref, [
+          'source_table',
+          'source_schema',
+          'target_schema',
+          'target_table',
+          'source_column',
+          'target_column',
+        ]);
+      }
+      if (dialect.isUnique && dialect.isUnique(ref as any as FKRow, rows)) {
+        ref.isUnique = ref.constraint_name || true;
+      }
+      if (_.isFunction(dialect.isPrimaryKey) && dialect.isPrimaryKey(ref)) {
+        ref.isPrimaryKey = true;
+      }
+      if (dialect.isSerialKey && dialect.isSerialKey(ref)) {
+        ref.isSerialKey = true;
+      }
+      foreignKeys.push(ref);
+      // foreignKeys[tableQname] = foreignKeys[tableQname] || {};
+      // foreignKeys[tableQname][ref.source_column] = _.assign(
+      //   {},
+      //   foreignKeys[tableQname][ref.source_column],
+      //   ref,
+      // );
     }
   }
 

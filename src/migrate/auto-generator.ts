@@ -661,20 +661,6 @@ export class AutoGenerator {
     field: string,
     tableNameOrig: string,
   ): string {
-    // ignore Sequelize standard fields
-    const additional = this.options.additional;
-    if (
-      additional &&
-      additional.timestamps !== false &&
-      (this.isTimestampField(field) || this.isParanoidField(field))
-    ) {
-      return '';
-    }
-
-    if (this.isIgnoredField(field)) {
-      return '';
-    }
-
     // Find foreign key
     const foreignKey =
       this.foreignKeys[table] && this.foreignKeys[table][field]
@@ -706,20 +692,6 @@ export class AutoGenerator {
     field: string,
     tableNameOrig: string,
   ): string {
-    // ignore Sequelize standard fields
-    const additional = this.options.additional;
-    if (
-      additional &&
-      additional.timestamps !== false &&
-      (this.isTimestampField(field) || this.isParanoidField(field))
-    ) {
-      return '';
-    }
-
-    if (this.isIgnoredField(field)) {
-      return '';
-    }
-
     // Find foreign key
     const foreignKey =
       this.foreignKeys[table] && this.foreignKeys[table][field]

@@ -58,9 +58,9 @@ export class AutoWriter {
     mkdirp.sync(path.resolve(this.options.directory || './db/seeders'));
 
     const promises = [];
-    const { tableName, timestamp } = this.tableData;
+    const { tableName } = this.tableData;
     // console.log(tableName, timestamp);
-    const fileName = `${timestamp}-${tableName}.js`;
+    const fileName = `${tableName}.js`;
     const initFilePath = path.join(this.options.directory, fileName);
     const writeFile = util.promisify(fs.writeFile);
     const initPromise = writeFile(path.resolve(initFilePath), this.tableText);

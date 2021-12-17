@@ -84,6 +84,7 @@ export class TableData {
   tableSchema: string;
   timestamp: number;
   text?: string;
+  foreignKeys: any;
   constructor() {
     this.tables = {};
     this.indexes = {};
