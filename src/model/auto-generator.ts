@@ -32,6 +32,7 @@ export class AutoGenerator {
   hasTriggerTables: { [tableName: string]: boolean };
   relations: Relation[];
   space: string[];
+  isSequelizeInclude: Boolean;
   options: {
     indentation?: number;
     spaces?: boolean;
@@ -58,6 +59,7 @@ export class AutoGenerator {
     this.options = options;
     this.options.lang = this.options.lang || 'es5';
     this.space = makeIndent(this.options.spaces, this.options.indentation);
+    this.isSequelizeInclude = false;
   }
 
   makeHeaderTemplate() {
@@ -174,6 +176,11 @@ export class AutoGenerator {
       const re = new RegExp('#TABLE#', 'g');
       str = str.replace(re, tableName);
 
+      if (this.isSequelizeInclude === true) {
+        console.log('Sequlelize is included');
+        str = "const Sequelize = require('sequelize');\n\n" + str;
+      }
+      this.isSequelizeInclude = false;
       text[table] = str;
     });
 
@@ -406,6 +413,7 @@ export class AutoGenerator {
 
         let val_text = defaultVal;
         if (_.isString(defaultVal)) {
+          let includeSequelize = false;
           const field_type = fieldObj.type.toLowerCase();
           defaultVal = this.escapeSpecial(defaultVal);
 
@@ -441,11 +449,13 @@ export class AutoGenerator {
           ) {
             val_text = 'DataTypes.UUIDV4';
           } else if (defaultVal.match(/\w+\(\)$/)) {
+            includeSequelize = true;
             // replace db function with sequelize function
             val_text =
               "Sequelize.Sequelize.fn('" + defaultVal.replace(/\(\)$/g, '') + "')";
           } else if (this.isNumber(field_type)) {
             if (defaultVal.match(/\(\)/g)) {
+              includeSequelize = true;
               // assume it's a server function if it contains parens
               val_text = "Sequelize.Sequelize.literal('" + defaultVal + "')";
             } else {
@@ -453,6 +463,7 @@ export class AutoGenerator {
               val_text = defaultVal;
             }
           } else if (defaultVal.match(/\(\)/g)) {
+            includeSequelize = true;
             // embedded function, pass as literal
             val_text = "Sequelize.Sequelize.literal('" + defaultVal + "')";
           } else if (
@@ -471,12 +482,17 @@ export class AutoGenerator {
                 defaultVal.toLowerCase(),
               )
             ) {
+              includeSequelize = true;
               val_text = "Sequelize.Sequelize.literal('" + defaultVal + "')";
             } else {
               val_text = quoteWrapper + defaultVal + quoteWrapper;
             }
           } else {
             val_text = quoteWrapper + defaultVal + quoteWrapper;
+          }
+          if (this.isSequelizeInclude === false && includeSequelize === true) {
+            console.log('include Sequelize status updated');
+            this.isSequelizeInclude = true;
           }
         }
 
@@ -1025,7 +1041,7 @@ export class AutoGenerator {
     }
     return val
       .replace(/[\\]/g, '\\\\')
-      .replace(/["]/g, '\\"')
+      .replace(/[']/g, "\\'")
       .replace(/[/]/g, '\\/')
       .replace(/[\b]/g, '\\b')
       .replace(/[\f]/g, '\\f')

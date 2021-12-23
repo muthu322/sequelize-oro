@@ -93,9 +93,9 @@ export class AutoWriter {
     const { tableName } = qNameSplit(table);
     let fileName = recase(this.options.caseFile, tableName, this.options.singularize);
     if (this.type.forignKeys) {
-      fileName = '2-' + fileName;
+      fileName = '10000000000001-' + fileName;
     } else {
-      fileName = '1-' + fileName;
+      fileName = '10000000000000-' + fileName;
     }
     const filePath = path.join(
       this.options.directory,
