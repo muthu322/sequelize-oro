@@ -21,6 +21,7 @@ export class AutoRelater {
 
   relations: any;
   junction: any;
+  triggers: any;
   private usedChildNames: Set<string>;
 
   constructor(options: AutoOptions) {
@@ -109,7 +110,6 @@ export class AutoRelater {
         spec.foreignSources.source_table,
       ),
       source_table: spec.source_table,
-      constraint_name: spec.constraint_name,
       source_column: spec.source_column,
       target_table: spec.target_table,
       target_column: spec.target_column,

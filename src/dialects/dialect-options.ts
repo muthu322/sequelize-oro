@@ -63,6 +63,7 @@ export interface FKSpec extends FKRelation {
   isPrimaryKey: boolean;
   isUnique: boolean | string;
   foreignSources: {
+    constraint_name?: string;
     source_table?: string;
     source_schema?: string;
     source_column?: string;

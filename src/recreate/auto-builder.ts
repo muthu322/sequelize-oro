@@ -7,7 +7,7 @@ import {
   DialectOptions,
   FKRow,
   FKSpec,
-  TriggerCount,
+  // TriggerCount,
 } from './../dialects/dialect-options';
 import { dialects } from './../dialects/dialects';
 import { AutoOptions } from './types';
@@ -56,7 +56,6 @@ export class AutoBuilder {
         return this.executeQuery<string>(showViewsSql).then((tr2) => tr.concat(tr2));
       });
     }
-
     return prom
       .then((tr) => this.processTables(tr))
       .catch((err) => {
@@ -91,43 +90,80 @@ export class AutoBuilder {
 
     const promises = tables.map((t) => {
       return this.mapForeignKeys(t).then(() => {
-        // console.log('MAP FORKEY JUNC WORKING');
-        return this.mapForeignKeysJunction(t).then(() => {
-          // console.log('MAP TABLE WORKING');
-          return this.mapTable(t);
-        });
+        return this.mapTable(t).then(() => this.mapTriggers(t));
       });
     });
 
     return Promise.all(promises).then(() => this.tableData);
   }
-
-  private mapForeignKeysJunction(table: Table) {
+  private mapTriggers(table: Table) {
     const tableQname = makeTableQName(table);
-
-    const sql = this.dialect.getForeignKeysJunction(
+    const sql = this.dialect.getTriggers(
       table.table_name,
       table.table_schema || this.sequelize.getDatabaseName(),
     );
-
     // const dialect = this.dialect;
-    // const junction = this.tableData.junction;
-    // this.tableData.test = 'Muthukumar '+tableQname;
-    // this.tableData.junction[tableQname] = {};
-    this.tableData.junction = this.tableData.junction || {};
-    return this.executeQuery(sql)
+    const triggers = this.tableData.triggers;
+
+    return this.executeQuery<FKRow>(sql)
       .then((res) => {
-        // res.forEach(assignColumnDetails);
-        // console.log('MYJUNCTION');
-        // console.log(res);
-        this.tableData.junction[tableQname] = res;
+        res.forEach(assignTrigger);
       })
       .catch((err) => console.error(err));
-    // function assignColumnDetails(row, ix, rows) {
-    //     let ref = row;
-    //     junction[tableQname] = junction[tableQname] || {};
-    //     junction[tableQname] = lodash_1.default.assign({}, junction[tableQname], ref);
-    // }
+
+    function assignTrigger(row: any) {
+      // let ref: any;
+      // ref = row as any;
+
+      let ref = _.pick(row, [
+        'trigger_name',
+        'event_object_schema',
+        'event_object_table',
+        'event_manipulation',
+        'action_timing',
+        'action_condition',
+        'action_orientation',
+        'action_statement',
+        'proname',
+        'lanname',
+        'procost',
+        'prorows',
+        'provariadic',
+        'prosupport',
+        // 'prokind', ///always be f
+        'prosecdef',
+        'proleakproof',
+        'proisstrict',
+        'proretset',
+        'provolatile',
+        'proparallel',
+        'pronargs',
+        'pronargdefaults',
+        'result_data_type',
+        // 'prorettype',
+        'argument_data_types',
+        // 'proargtypes',
+        // 'proallargtypes',
+        'proargmodes',
+        'proargnames',
+        'proargdefaults',
+        'protrftypes',
+        'prosrc',
+        'probin',
+        'proconfig',
+        'proacl',
+        'funcion_def',
+      ]);
+
+      // console.log("ref");
+      // console.log(ref);
+
+      // console.log('Triggers');
+      // console.log(triggers);
+
+      triggers[tableQname] = triggers[tableQname] || {};
+      triggers[tableQname][ref.proname] = ref;
+    }
   }
 
   private mapForeignKeys(table: Table) {
@@ -159,13 +195,15 @@ export class AutoBuilder {
       ) {
         ref.isForeignKey = true;
         ref.foreignSources = _.pick(ref, [
-          'constraint_name',
           'source_table',
           'source_schema',
           'target_schema',
           'target_table',
           'source_column',
           'target_column',
+          'on_update',
+          'on_delete',
+          'constraint_name',
         ]);
       }
       if (dialect.isUnique && dialect.isUnique(ref as any as FKRow, rows)) {
@@ -297,17 +335,6 @@ export class AutoBuilder {
         if (idfield) {
           idfield.primaryKey = true;
         }
-      }
-
-      const countTriggerSql = this.dialect.countTriggerQuery(
-        table.table_name,
-        table.table_schema || '',
-      );
-      const triggerResult = await this.executeQuery<TriggerCount>(countTriggerSql);
-      const triggerCount =
-        triggerResult && triggerResult[0] && triggerResult[0].trigger_count;
-      if (triggerCount > 0) {
-        this.tableData.hasTriggerTables[makeTableQName(table)] = true;
       }
     } catch (err) {
       console.error(err);

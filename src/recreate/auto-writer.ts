@@ -25,6 +25,7 @@ export class AutoWriter {
   foreignKeys: { [tableName: string]: { [fieldName: string]: FKSpec } };
   relations: Relation[];
   space: string[];
+  type: any;
   options: {
     caseFile?: CaseFileOption;
     caseModel?: CaseOption;
@@ -32,19 +33,19 @@ export class AutoWriter {
     directory: string;
     lang?: LangOption;
     noAlias?: boolean;
-    noInitModels?: boolean;
     noWrite?: boolean;
     singularize?: boolean;
     useDefine?: boolean;
     spaces?: boolean;
     indentation?: number;
-    // tableOptions?: any;
+    migrationTimestamp?: number;
   };
-  constructor(tableData: TableData, options: AutoOptions) {
+  constructor(tableData: TableData, options: AutoOptions, type: any) {
     this.tableText = tableData.text as { [name: string]: string };
     this.foreignKeys = tableData.foreignKeys;
     this.relations = tableData.relations;
     this.options = options;
+    this.type = type;
     this.space = makeIndent(this.options.spaces, this.options.indentation);
   }
 
@@ -53,41 +54,27 @@ export class AutoWriter {
       return Promise.resolve();
     }
 
-    mkdirp.sync(path.resolve(this.options.directory || './models'));
+    mkdirp.sync(path.resolve(this.options.directory || './seeders'));
 
     const tables = _.keys(this.tableText).sort();
-    // write the individual model files
+
     const promises = tables.map((t) => {
       return this.createFile(t);
     });
-    const isTypeScript = this.options.lang === 'ts';
-    // association are commented
-    // const assoc = this.createAssociations();
-    const assoc = '';
+
+    // const isTypeScript = this.options.lang === 'ts';
+    // const assoc = this.createAssociations(isTypeScript);
 
     // get table names without schema
     // TODO: add schema to model and file names when schema is non-default for the dialect
-    const tableNames = tables.map((t) => {
-      const { tableName } = qNameSplit(t);
-      return tableName as string;
-    });
-
-    // write the init-models file
-    if (!this.options.noInitModels) {
-      const initString = this.createInitString(tableNames, assoc, this.options.lang);
-      const initFilePath = path.join(
-        this.options.directory,
-        'init-models' + (isTypeScript ? '.ts' : '.js'),
-      );
-      const writeFile = util.promisify(fs.writeFile);
-      const initPromise = writeFile(path.resolve(initFilePath), initString);
-      promises.push(initPromise);
-    }
+    // const tableNames = tables.map((t) => {
+    //   const [schemaName, tableName] = qNameSplit(t);
+    //   return tableName as string;
+    // });
 
     return Promise.all(promises);
   }
   private createInitString(tableNames: string[], assoc: string, lang?: string) {
-    console.log('lang ' + lang + ' worked');
     switch (lang) {
       case 'ts':
         return this.createTsInitString(tableNames, assoc);
@@ -104,7 +91,8 @@ export class AutoWriter {
     // is up to the developer to pick the right schema, and potentially chose different output
     // folders for each different schema.
     const { tableName } = qNameSplit(table);
-    const fileName = recase(this.options.caseFile, tableName, this.options.singularize);
+    let fileName =
+      'recreate_' + recase(this.options.caseFile, tableName, this.options.singularize);
     const filePath = path.join(
       this.options.directory,
       fileName + (this.options.lang === 'ts' ? '.ts' : '.js'),
@@ -121,21 +109,9 @@ export class AutoWriter {
     const sp = this.space[1];
 
     const rels = this.relations;
-    // console.log('seq options');
-    // console.log(this.options);
-
     rels.forEach((rel) => {
-      console.log('Relations');
-      console.log(rel);
       if (rel.isM2M) {
         const asprop = recase(this.options.caseProp, pluralize(rel.childProp));
-        // if (
-        //   this.options.tableOptions &&
-        //   this.options.tableOptions[rel.source_table] &&
-        //   this.options.tableOptions[rel.source_table]['forignKeyOptions']
-        // ) {
-        //   console.log('forignKey Options found');
-        // }
         strBelongsToMany += `${sp}${rel.parentModel}.belongsToMany(${rel.childModel}, { as: '${asprop}', through: ${rel.joinModel}, foreignKey: "${rel.parentId}", otherKey: "${rel.childId}" });\n`;
       } else {
         // const bAlias = (this.options.noAlias && rel.parentModel.toLowerCase() === rel.parentProp.toLowerCase()) ? '' : `as: "${rel.parentProp}", `;

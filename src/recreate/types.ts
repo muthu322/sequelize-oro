@@ -75,12 +75,6 @@ export interface Relation {
   source_column: string;
   /** Conjuction target Column */
   target_column: string;
-  /** Conjuction target Column */
-  source_table: string;
-  /** Conjuction target Column */
-  forign_key_name: string;
-  /** Constraint Name  */
-  constraint_name: string;
 }
 
 export class TableData {
@@ -88,6 +82,7 @@ export class TableData {
   tables: { [tableName: string]: { [fieldName: string]: ColumnDescription } };
   /** Foreign keys for each table; indexed by schemaName.tableName */
   foreignKeys: { [tableName: string]: { [fieldName: string]: FKSpec } };
+  triggers: any = {};
   junction: any;
   /** Flag `true` for each table that has any trigger.  This affects how Sequelize performs updates. */
   hasTriggerTables: { [tableName: string]: boolean };
@@ -99,8 +94,8 @@ export class TableData {
   text?: { [name: string]: string };
   constructor() {
     this.tables = {};
-    this.foreignKeys = {};
     this.indexes = {};
+    this.foreignKeys = {};
     this.hasTriggerTables = {};
     this.relations = [];
   }
@@ -168,8 +163,6 @@ export interface AutoOptions {
   noAlias?: boolean;
   /** Whether to skip writing index information */
   noIndexes?: boolean;
-  /** Whether to skip writing the init-models file */
-  noInitModels?: boolean;
   /** Whether to skip writing the files */
   noWrite?: boolean;
   /** Database password */
@@ -198,10 +191,8 @@ export interface AutoOptions {
   pkSuffixes?: string[];
   /** Use `sequelize.define` instead of `init` for model initialization.  See issues #527, #559, #573 */
   useDefine: boolean;
-  /** Table Options  */
-  tableOptions: any;
-  /** Alias Name Replacer */
-  aliasOptions: any;
+  /** Migration TimeStamp */
+  migrationTimestamp?: number;
 }
 
 export type TSField = { special: string[]; elementType: string } & ColumnDescription;
@@ -251,13 +242,6 @@ export function recase(
   return val;
 }
 
-export function strReplace(retStr: string, arr: string[]) {
-  arr.forEach((obj: any) => {
-    retStr = retStr.replace(obj.find, obj.replace);
-  });
-  return retStr;
-}
-
 export function replace(retStr: string, obj: any) {
   for (var x in obj) {
     retStr = retStr.replace(new RegExp(x, 'g'), obj[x]);
@@ -293,3 +277,15 @@ export function makeIndent(
   }
   return space;
 }
+
+export const getYYYYMMDDHHMMSS = (date = new Date()) =>
+  Number(
+    [
+      date.getUTCFullYear(),
+      (date.getUTCMonth() + 1).toString().padStart(2, '0'),
+      date.getUTCDate().toString().padStart(2, '0'),
+      date.getUTCHours().toString().padStart(2, '0'),
+      date.getUTCMinutes().toString().padStart(2, '0'),
+      date.getUTCSeconds().toString().padStart(2, '0'),
+    ].join(''),
+  );
