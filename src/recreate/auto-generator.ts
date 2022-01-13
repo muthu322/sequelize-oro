@@ -1,20 +1,18 @@
 import _ from 'lodash';
-import { ColumnDescription } from 'sequelize/types';
 
-import { DialectOptions, FKSpec } from './../dialects/dialect-options';
+// import { ColumnDescription } from 'sequelize/types';
+// import { DialectOptions } from './../dialects/dialect-options';
 import {
   AutoOptions,
-  CaseFileOption,
-  CaseOption,
+  // CaseFileOption,
+  // CaseOption,
   Field,
-  IndexSpec,
-  LangOption,
+  // LangOption,
   makeIndent,
   pluralize,
   qNameJoin,
   qNameSplit,
   recase,
-  Relation,
   replace,
   singularize,
   TableData,
@@ -23,50 +21,26 @@ import {
 
 /** Generates text from each table in TableData */
 export class AutoGenerator {
-  dialect: DialectOptions;
-  tables: { [tableName: string]: { [fieldName: string]: ColumnDescription } };
-  foreignKeys: { [tableName: string]: { [fieldName: string]: FKSpec } };
+  foreignKeys: any;
   junction: any;
   triggers: any;
-  hasTriggerTables: { [tableName: string]: boolean };
-  indexes: { [tableName: string]: IndexSpec[] };
-  relations: Relation[];
+  // hasTriggerTables: { [tableName: string]: boolean };
+  // indexes: { [tableName: string]: IndexSpec[] };
+  // relations: Relation[];
   space: string[];
+  tableData: any;
+  rows: any;
+  options: AutoOptions;
   type: any;
-  options: {
-    indentation?: number;
-    spaces?: boolean;
-    lang?: LangOption;
-    caseModel?: CaseOption;
-    caseProp?: CaseOption;
-    caseFile?: CaseFileOption;
-    skipFields?: string[];
-    additional?: any;
-    schema?: string;
-    singularize: boolean;
-    useDefine: boolean;
-    noIndexes?: boolean;
-    functionQuery?: boolean;
-  };
 
-  constructor(
-    tableData: TableData,
-    dialect: DialectOptions,
-    options: AutoOptions,
-    type: any,
-  ) {
-    this.tables = tableData.tables;
-    this.foreignKeys = tableData.foreignKeys;
-    this.junction = tableData.junction;
-    this.triggers = tableData.triggers;
-    this.hasTriggerTables = tableData.hasTriggerTables;
-    this.indexes = tableData.indexes;
-    this.relations = tableData.relations;
-    this.dialect = dialect;
+  constructor(tableData: TableData, rows: any, options: AutoOptions) {
+    // this.tables = tableData.tables;
+    // this.indexes = tableData.indexes;
+    this.tableData = tableData;
     this.options = options;
-    this.options.lang = this.options.lang || 'es5';
-    this.space = makeIndent(this.options.spaces, this.options.indentation);
-    this.type = type;
+    this.rows = rows;
+    this.space = makeIndent(true, 2);
+    this.foreignKeys = tableData.foreignKeys;
   }
 
   makeHeaderTemplate() {
@@ -76,7 +50,7 @@ export class AutoGenerator {
     return header;
   }
 
-  generateMigration() {
+  async generateText() {
     const tableNames = _.keys(this.tables);
     const header = `module.exports = {\n`;
     const text: { [name: string]: string } = {};
@@ -108,8 +82,8 @@ export class AutoGenerator {
     str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`;
     str += `${space[2]}try {\n`;
     const fields = _.keys(this.tables[table]);
-    fields.forEach((field) => {
-      str += this.removeForignKeyRelations(table, field, tableNameOrig || 'table');
+    this.foreignKeys.forEach((field: any) => {
+      str += this.removeForignKeyRelations(field);
     });
     str += this.removeMigrationFunctions(table);
     // str += this.removeMigrationIndex(table, tableNameOrig || 'table');
@@ -175,22 +149,22 @@ export class AutoGenerator {
     str += `${space[3]}let transferSql = 'INSERT INTO "${tableNameOrig}" (';\n`;
     str += `${space[3]}tableValues.forEach((myfield, i) => {\n`;
     str += `${space[4]}transferSql += myfield.columnName;\n`;
-    str += `${space[4]}if (tableValues.length !== i+1) {\n`;
+    str += `${space[4]}if (tableValues.length !== i + 1) {\n`;
     str += `${space[5]}transferSql += ', ';\n`;
     str += `${space[4]}}\n`;
     str += `${space[3]}});\n`;
     str += `${space[3]}transferSql += ') SELECT ';\n`;
     str += `${space[3]}tableValues.forEach((myfield, i) => {\n`;
     str += `${space[4]}transferSql += myfield.value;\n`;
-    str += `${space[4]}if (tableValues.length !== i+1) {\n`;
+    str += `${space[4]}if (tableValues.length !== i + 1) {\n`;
     str += `${space[5]}transferSql += ', ';\n`;
     str += `${space[4]}}\n`;
     str += `${space[3]}});\n`;
     str += `${space[3]}transferSql += ' FROM "${new_table_name}"';\n`;
     str += `${space[3]}console.log(transferSql);\n`;
-    str += `${space[3]}await queryInterface.sequelize.query(transferSql, { transaction });`;
-    fields.forEach((field) => {
-      str += this.addForignKeyRelations(table, field, tableNameOrig || 'table');
+    str += `${space[3]}await queryInterface.sequelize.query(transferSql, { transaction });\n`;
+    this.foreignKeys.forEach((field: any) => {
+      str += this.addForignKeyRelations(field);
     });
     str += this.addMigrationIndex(table, tableNameOrig || 'table');
     str += this.addMigrationFunctions(table);
@@ -634,24 +608,6 @@ export class AutoGenerator {
     return str;
   }
 
-  generateConstraint() {
-    const tableNames = _.keys(this.tables);
-    const header = `module.exports = {\n`;
-    const text: { [name: string]: string } = {};
-    tableNames.forEach((table) => {
-      let str = header;
-      const { tableName: tableNameOrig } = qNameSplit(table);
-      if (tableNameOrig) {
-        str += this.addConstraint(table);
-        const re = new RegExp('#TABLE#', 'g');
-        str = str.replace(re, tableNameOrig);
-
-        text[table] = str;
-      }
-    });
-
-    return text;
-  }
   private addConstraint(table: string) {
     const { tableName: tableNameOrig } = qNameSplit(table);
     const space = this.space;
@@ -660,9 +616,9 @@ export class AutoGenerator {
     let str = `${space[1]}up: async (queryInterface) => {\n`;
     str += `${space[2]}const transaction = await queryInterface.sequelize.transaction();\n`;
     str += `${space[2]}try {\n`;
-    const fields = _.keys(this.tables[table]);
-    fields.forEach((field) => {
-      str += this.addForignKeyRelations(table, field, tableNameOrig || 'table');
+    // const fields = _.keys(this.tables[table]);
+    this.foreignKeys.forEach((field: any) => {
+      str += this.addForignKeyRelations(field);
     });
     str += `${space[3]}await transaction.commit();\n`;
     str += `${space[2]}} catch (err) {\n`;
@@ -675,8 +631,8 @@ export class AutoGenerator {
     str += `${space[2]}try {\n`;
 
     str += `${space[3]}console.log('Dropping Constraints of Table ${tableNameOrig}...');\n`;
-    fields.forEach((field) => {
-      str += this.removeForignKeyRelations(table, field, tableNameOrig || 'table');
+    this.foreignKeys.forEach((field: any) => {
+      str += this.removeForignKeyRelations(field);
     });
     str += `${space[3]}await transaction.commit();\n`;
     str += `${space[2]}} catch (err) {\n`;
@@ -688,76 +644,33 @@ export class AutoGenerator {
 
     return str;
   }
-  private removeForignKeyRelations(
-    table: string,
-    field: string,
-    tableNameOrig: string,
-  ): string {
+  private removeForignKeyRelations(foreignKey: any): string {
     // Find foreign key
-    const foreignKey =
-      this.foreignKeys[table] && this.foreignKeys[table][field]
-        ? this.foreignKeys[table][field]
-        : null;
-    const fieldObj = this.tables[table][field] as Field;
-
-    if (_.isObject(foreignKey)) {
-      fieldObj.foreignKey = foreignKey;
-    }
 
     let str = '';
     const space = this.space;
-    const fieldAttrs = _.keys(fieldObj);
-    fieldAttrs.forEach((attr) => {
-      if (attr === 'foreignKey') {
-        if (foreignKey && foreignKey.isForeignKey) {
-          str += `${space[3]}await queryInterface.removeConstraint('${tableNameOrig}', '${fieldObj[attr].foreignSources.constraint_name}', { transaction });\n`;
-        } else {
-          return true;
-        }
-      }
-    });
+    // str += `${space[3]}console.log('${foreignKey.constraint_name}');\n`;
+    str += `${space[3]}await queryInterface.removeConstraint('${foreignKey.source_table}', '${foreignKey.constraint_name}', { transaction });\n`;
     return str;
   }
 
-  private addForignKeyRelations(
-    table: string,
-    field: string,
-    tableNameOrig: string,
-  ): string {
+  private addForignKeyRelations(foreignKey: any): string {
     // Find foreign key
-    const foreignKey =
-      this.foreignKeys[table] && this.foreignKeys[table][field]
-        ? this.foreignKeys[table][field]
-        : null;
-    const fieldObj = this.tables[table][field] as Field;
-
-    if (_.isObject(foreignKey)) {
-      fieldObj.foreignKey = foreignKey;
-    }
-
     let str = '';
     const space = this.space;
-    const fieldAttrs = _.keys(fieldObj);
-    fieldAttrs.forEach((attr) => {
-      if (attr === 'foreignKey') {
-        if (foreignKey && foreignKey.isForeignKey) {
-          str += `${space[3]}await queryInterface.addConstraint('${tableNameOrig}', {\n`;
-          str += `${space[4]}type: 'foreign key',\n`;
-          str += `${space[4]}name: '${fieldObj[attr].foreignSources.constraint_name}',\n`;
-          str += `${space[4]}fields: ['${field}'],\n`;
-          str += `${space[4]}references: {\n`;
-          str += `${space[5]}table: '${fieldObj[attr].foreignSources.target_table}',\n`;
-          str += `${space[5]}field: '${fieldObj[attr].foreignSources.target_column}',\n`;
-          str += `${space[4]}},\n`;
-          str += `${space[4]}onDelete: '${fieldObj[attr].foreignSources.on_delete}',\n`;
-          str += `${space[4]}onUpdate: '${fieldObj[attr].foreignSources.on_update}',\n`;
-          str += `${space[4]}transaction,\n`;
-          str += `${space[3]}});\n`;
-        } else {
-          return true;
-        }
-      }
-    });
+    // str += `${space[3]}console.log('${foreignKey.constraint_name}');\n`;
+    str += `${space[3]}await queryInterface.addConstraint('${foreignKey.source_table}', {\n`;
+    str += `${space[4]}type: 'foreign key',\n`;
+    str += `${space[4]}name: '${foreignKey.constraint_name}',\n`;
+    str += `${space[4]}fields: ['${foreignKey.source_column}'],\n`;
+    str += `${space[4]}references: {\n`;
+    str += `${space[5]}table: '${foreignKey.target_table}',\n`;
+    str += `${space[5]}field: '${foreignKey.target_column}',\n`;
+    str += `${space[4]}},\n`;
+    str += `${space[4]}onDelete: '${foreignKey.on_delete}',\n`;
+    str += `${space[4]}onUpdate: '${foreignKey.on_update}',\n`;
+    str += `${space[4]}transaction,\n`;
+    str += `${space[3]}});\n`;
     return str;
   }
 

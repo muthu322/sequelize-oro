@@ -1,6 +1,6 @@
 {
   "name": "sequelize-oro",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "publishConfig": {
     "tag": "latest"
   },
@@ -60,7 +60,8 @@
   "dependencies": {
     "lodash": "^4.17.21",
     "mkdirp": "^1.0.4",
-    "yargs": "^16.2.0"
+    "yargs": "^16.2.0",
+    "reserved-words": "^0.1.2"
   },
   "peerDependencies": {
     "sequelize": ">3.30.0"
@@ -81,7 +82,6 @@
     "nyc": "^15.1.0",
     "pg": "^8.5.1",
     "pg-hstore": "^2.3.3",
-    "reserved-words": "^0.1.2",
     "rimraf": "^3.0.2",
     "sequelize": "^6.11",
     "tedious": "^11.0.6",
